@@ -9,6 +9,7 @@ CONFIG += c++11
 # depend on your compiler). Please consult the documentation of the
 # deprecated API in order to know how to port your code away from it.
 DEFINES += QT_DEPRECATED_WARNINGS
+DEFINES += TYY_PLAYER_STATIC
 
 # You can also make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
@@ -17,13 +18,86 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
     main.cpp \
-    mainwindow.cpp
+    mainwindow.cpp \
+    src/player/tyy_ffmpeg_d3d11va.cpp \
+    src/player/tyy_ffmpeg_hw.cpp \
+    src/player/tyy_ffplay_core.cpp \
+    src/player/tyy_log.cpp \
+    src/player/tyy_player.cpp \
+    src/player/tyy_player_api.cpp \
+    src/player/tyy_properties.cpp \
+    src/player/tyy_sonic.cpp \
+    src/player/tyy_video_state.cpp
 
 HEADERS += \
-    mainwindow.h
+    mainwindow.h \
+    src/player/tyy_ffmpeg_d3d11va.h \
+    src/player/tyy_ffmpeg_hw.h \
+    src/player/tyy_ffplay_core.h \
+    src/player/tyy_log.h \
+    src/player/tyy_player.h \
+    src/player/tyy_player_api.h \
+    src/player/tyy_properties.h \
+    src/player/tyy_sonic.h \
+    src/player/tyy_video_state.h
 
 FORMS += \
     mainwindow.ui
+
+INCLUDEPATH += $$PWD/src/player
+
+win32 {
+    FFMPEG_ROOT = E:/me-lessons/code_test/ffplay_study/3rdlib/ffmepg-4.4-study
+    SDL_ROOT = E:/me-lessons/code_test/ffplay_study/3rdlib/libsdl2
+    INCLUDEPATH += $$FFMPEG_ROOT/include
+    INCLUDEPATH += $$SDL_ROOT/include
+    FFMPEG_RUNTIME_DLLS = \
+        $$FFMPEG_ROOT/bin/avcodec-58.dll \
+        $$FFMPEG_ROOT/bin/avdevice-58.dll \
+        $$FFMPEG_ROOT/bin/avfilter-7.dll \
+        $$FFMPEG_ROOT/bin/avformat-58.dll \
+        $$FFMPEG_ROOT/bin/avutil-56.dll \
+        $$FFMPEG_ROOT/bin/postproc-55.dll \
+        $$FFMPEG_ROOT/bin/swresample-3.dll \
+        $$FFMPEG_ROOT/bin/swscale-5.dll \
+        $$FFMPEG_ROOT/bin/fdk-aac.dll \
+        $$FFMPEG_ROOT/bin/libmp3lame.dll \
+        $$FFMPEG_ROOT/bin/libx264.dll \
+        $$FFMPEG_ROOT/bin/x265.dll \
+        $$FFMPEG_ROOT/bin/SDL2.dll
+    CONFIG(debug, debug|release):RUNTIME_DEST_DIR = $$OUT_PWD/debug
+    CONFIG(release, debug|release):RUNTIME_DEST_DIR = $$OUT_PWD/release
+    for(DLL_FILE, FFMPEG_RUNTIME_DLLS) {
+        QMAKE_POST_LINK += cmd /c copy /Y $$system_path($$DLL_FILE) $$system_path($$RUNTIME_DEST_DIR) $$escape_expand(\\n\\t)
+    }
+    LIBS += -L$$FFMPEG_ROOT/lib \
+        -lavdevice \
+        -lavfilter \
+        -lavformat \
+        -lavcodec \
+        -lpostproc \
+        -lavutil \
+        -lswscale \
+        -lswresample \
+        -lshell32 \
+        -lole32 \
+        -lwinmm \
+        -ld3d11 \
+        -ldxgi \
+        -ldxguid
+    LIBS += -L$$SDL_ROOT/lib \
+        -lSDL2
+}
+
+unix:!macx:!android {
+    CONFIG += link_pkgconfig
+    PKGCONFIG += libavformat libavcodec libavutil libswscale libswresample
+}
+
+macx {
+    CONFIG += link_pkgconfig
+    PKGCONFIG += libavformat libavcodec libavutil libswscale libswresample
+}
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

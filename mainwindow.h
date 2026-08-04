@@ -4,6 +4,8 @@
 #include <QMainWindow>
 #include <QVector>
 
+#include "tyy_player_api.h"
+
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -16,6 +18,7 @@ class QPushButton;
 class QSlider;
 class QTimer;
 class QWidget;
+class QEvent;
 
 class MainWindow : public QMainWindow
 {
@@ -40,13 +43,24 @@ public:
     */
     ~MainWindow();
 
+protected:
+    /**
+    * @brief Filter video area mouse double click events
+    * @author: tyy
+    * @param[in] watched Event source object
+    * @param[in] event Qt event object
+    * @return true if event handled
+    * @note:
+    */
+    bool eventFilter(QObject *watched, QEvent *event);
+
 private slots:
     /**
     * @brief 添加媒体文件到播放列表
     * @author: tyy
     * @param 无
     * @return 无
-    * @note: 当前只维护界面列表，暂不打开底层播放器
+    * @note:
     */
     void add_media_files();
 
@@ -64,9 +78,18 @@ private slots:
     * @author: tyy
     * @param 无
     * @return 无
-    * @note: 当前使用定时器模拟播放进度
+    * @note:
     */
     void toggle_play();
+
+    /**
+    * @brief 停止当前播放的视频
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void stop_play();
 
     /**
     * @brief 向后跳转播放进度
@@ -140,6 +163,15 @@ private slots:
     */
     void set_split_screen_count();
 
+    /**
+    * @brief Toggle main window full screen state
+    * @author: tyy
+    * @param none
+    * @return none
+    * @note:
+    */
+    void toggle_full_screen();
+
 private:
     /**
     * @brief 初始化主界面控件布局
@@ -196,6 +228,42 @@ private:
     void update_split_screen(int split_count);
 
     /**
+    * @brief 加载上次保存的播放列表
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void load_playlist();
+
+    /**
+    * @brief 保存当前播放列表
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void save_playlist() const;
+
+    /**
+    * @brief 打开并启动当前选中的媒体文件
+    * @author: tyy
+    * @param 无
+    * @return 错误码
+    * @note: 当前先使用第一个分屏窗口播放
+    */
+    int start_current_media();
+
+    /**
+    * @brief 释放当前播放器对象
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void release_current_player();
+
+    /**
     * @brief 获取指定分屏数量对应的列数
     * @author: tyy
     * @param[in] split_count 分屏数量
@@ -220,6 +288,15 @@ private:
     // 视频显示区域的父控件
     QWidget *_video_widget;
 
+    // 播放区域父控件
+    QWidget *_play_widget;
+
+    // 播放控制区域控件
+    QWidget *_control_widget;
+
+    // 播放列表区域控件
+    QWidget *_playlist_panel;
+
     // 视频分屏网格布局
     QGridLayout *_video_layout;
 
@@ -234,6 +311,9 @@ private:
 
     // 播放和暂停按钮
     QPushButton *_play_button;
+
+    // 停止播放按钮
+    QPushButton *_stop_button;
 
     // 添加媒体文件按钮
     QPushButton *_add_button;
@@ -258,5 +338,9 @@ private:
 
     // 当前是否处于播放状态
     bool _is_playing;
+
+    // 当前播放使用的底层播放器句柄
+    TyyPlayerHandle _player_handle;
 };
+
 #endif // MAINWINDOW_H

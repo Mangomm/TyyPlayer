@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <string>
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 
 #ifdef _WIN32
@@ -179,7 +180,7 @@ enum {
 
 		bool play(const Properties &properties, int &return_val);
 
-		bool play(int type, void* data, int data_size, int &return_val);
+//		bool play(int type, void* data, int data_size, int &return_val);
 
 		bool close();
 
@@ -554,6 +555,10 @@ enum {
 		int _timeout = 5;
 		MediaEndActionFlag _end_flag = MediaEndAction_KeepDisplay;
 		std::mutex _mutex_play_close;
+		std::mutex _sdl_init_mutex;
+		std::condition_variable _sdl_init_cond;
+		bool _sdl_init_finished = false;
+		bool _sdl_init_success = false;
 
 #ifdef USE_SONIC
 		sonicStreamStruct *_audio_speed_convert = NULL;

@@ -171,10 +171,7 @@ int PacketQueue::packet_queue_get(AVPacket *pkt, int block, int *serial)
 			if (!_first_pkt)
 				_last_pkt = NULL;
 
-			TYYINFO("packet_queue_get pkt before, nb: {}", _nb_packets);
-
 			_nb_packets--;
-			TYYINFO("packet_queue_get pkt, nb: {}", _nb_packets);
 			_size -= pkt1->pkt.size + sizeof(*pkt1);
 			_duration -= pkt1->pkt.duration;
 
@@ -502,8 +499,6 @@ void Decoder::decoder_init(AVCodecContext *avctx, PacketQueue *queue, SDL_cond *
 
 int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
 	int ret = AVERROR(EAGAIN);
-	int64_t t1, get_one_frame = 0;
-	bool is_flush = false;
 
 	for (;;) {
 		AVPacket pkt;
@@ -518,13 +513,9 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
 				switch (_avctx->codec_type) {
 				case AVMEDIA_TYPE_VIDEO:
 					ret = avcodec_receive_frame(_avctx, frame);
-					TYYINFO("video avcodec_receive_frame ret: {}, EAGAIN: {}", ret, ret == AVERROR(EAGAIN));
 					if (ret >= 0) {
 
 						if (-1 == -1) {
-
-							TYYDEBUG("ffmpeg video decode src pts: {}(s)",
-								frame->best_effort_timestamp * av_q2d(_avctx->pkt_timebase));
 
 							frame->pts = frame->best_effort_timestamp;
 						}
@@ -533,20 +524,14 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
 							frame->pts = frame->pkt_dts;
 						}
 
-						TYYDEBUG("get a frame time elp: {}(s)", (av_gettime_relative() - get_one_frame) / 1000000.0);
 					}
 					break;
 
 				case AVMEDIA_TYPE_AUDIO:
 					ret = avcodec_receive_frame(_avctx, frame);
-					TYYINFO("audio avcodec_receive_frame ret: {}, EAGAIN: {}", ret, ret == AVERROR(EAGAIN));
 					if (ret >= 0) {
 						AVRational tb = { 1, frame->sample_rate };
 						if (frame->pts != AV_NOPTS_VALUE) {
-
-							TYYDEBUG("ffmpeg audio decode src pts: {}(s), ishare pts: {}(s)",
-								frame->pts * av_q2d(_avctx->pkt_timebase),
-								av_rescale_q(frame->pts, _avctx->pkt_timebase, tb) * av_q2d(tb));
 
 							frame->pts = av_rescale_q(frame->pts, _avctx->pkt_timebase, tb);
 						}
@@ -606,12 +591,9 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
 			_finished = 0;
 			_next_pts = _start_pts;
 			_next_pts_tb = _start_pts_tb;
-			get_one_frame = av_gettime_relative();
-			is_flush = true;
 		}
 		else {
 
-			is_flush = false;
 			if (_avctx->codec_type == AVMEDIA_TYPE_SUBTITLE) {
 				int got_frame = 0;
 				ret = avcodec_decode_subtitle2(_avctx, sub, &got_frame, &pkt);
@@ -630,7 +612,6 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
 				}
 			}
 			else {
-				t1 = av_gettime_relative();
 				if (avcodec_send_packet(_avctx, &pkt) == AVERROR(EAGAIN)) {
 
 					av_log(_avctx, AV_LOG_ERROR, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
@@ -638,7 +619,6 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
 					_packet_pending = 1;
 					av_packet_move_ref(&_pkt, &pkt);
 				}
-				TYYDEBUG("avcodec_send_packet elp: {}(ms)", (av_gettime_relative() - t1) / 1000);
 			}
 			av_packet_unref(&pkt);
 		}

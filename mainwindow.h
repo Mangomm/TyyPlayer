@@ -13,6 +13,7 @@ QT_END_NAMESPACE
 class QLabel;
 class QGridLayout;
 class QListWidget;
+class QListWidgetItem;
 class QPoint;
 class QPushButton;
 class QSlider;
@@ -146,6 +147,15 @@ private slots:
     void on_playlist_row_changed(int current_row);
 
     /**
+    * @brief 双击播放列表文件后直接播放
+    * @author: tyy
+    * @param[in] item 双击的播放列表项
+    * @return 无
+    * @note:
+    */
+    void play_playlist_item(QListWidgetItem *item);
+
+    /**
     * @brief 显示视频区域右键菜单
     * @author: tyy
     * @param[in] position 鼠标右键菜单位置
@@ -171,6 +181,33 @@ private slots:
     * @note:
     */
     void toggle_full_screen();
+
+    /**
+    * @brief 显示或隐藏播放列表区域
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void toggle_playlist_panel();
+
+    /**
+    * @brief 隐藏视频悬浮全屏按钮
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void hide_video_overlay();
+
+    /**
+    * @brief 切换某一路视频独立全屏
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void toggle_video_screen_full_screen();
 
 private:
     /**
@@ -228,6 +265,78 @@ private:
     void update_split_screen(int split_count);
 
     /**
+    * @brief 更新指定分屏的选中状态
+    * @author: tyy
+    * @param[in] screen_index 分屏索引
+    * @return 无
+    * @note:
+    */
+    void select_video_screen(int screen_index);
+
+    /**
+    * @brief 更新分屏显示控件样式
+    * @author: tyy
+    * @param[in] screen_index 分屏索引
+    * @return 无
+    * @note:
+    */
+    void update_video_label_style(int screen_index);
+
+    /**
+    * @brief 显示指定分屏的悬浮全屏按钮
+    * @author: tyy
+    * @param[in] screen_index 分屏索引
+    * @return 无
+    * @note:
+    */
+    void show_video_overlay(int screen_index);
+
+    /**
+    * @brief 更新指定分屏悬浮按钮位置
+    * @author: tyy
+    * @param[in] screen_index 分屏索引
+    * @return 无
+    * @note:
+    */
+    void update_video_overlay_geometry(int screen_index);
+
+    /**
+    * @brief 进入指定分屏独立全屏
+    * @author: tyy
+    * @param[in] screen_index 分屏索引
+    * @return 无
+    * @note:
+    */
+    void enter_video_screen_full_screen(int screen_index);
+
+    /**
+    * @brief 退出分屏独立全屏
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void exit_video_screen_full_screen();
+
+    /**
+    * @brief 更新播放列表显示按钮状态
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void update_playlist_toggle_button();
+
+    /**
+    * @brief 获取下一次播放使用的分屏索引
+    * @author: tyy
+    * @param 无
+    * @return 分屏索引
+    * @note:
+    */
+    int get_next_play_screen_index();
+
+    /**
     * @brief 加载上次保存的播放列表
     * @author: tyy
     * @param 无
@@ -255,6 +364,15 @@ private:
     int start_current_media();
 
     /**
+    * @brief 在指定分屏打开并启动当前选中的媒体文件
+    * @author: tyy
+    * @param[in] screen_index 分屏索引
+    * @return 错误码
+    * @note:
+    */
+    int start_current_media(int screen_index);
+
+    /**
     * @brief 释放当前播放器对象
     * @author: tyy
     * @param 无
@@ -262,6 +380,15 @@ private:
     * @note:
     */
     void release_current_player();
+
+    /**
+    * @brief 释放指定分屏的播放器对象
+    * @author: tyy
+    * @param[in] screen_index 分屏索引
+    * @return 无
+    * @note:
+    */
+    void release_screen_player(int screen_index);
 
     /**
     * @brief 获取指定分屏数量对应的列数
@@ -303,6 +430,15 @@ private:
     // 视频分屏显示控件列表
     QVector<QLabel *> _video_labels;
 
+    // 每个分屏对应的底层播放器句柄
+    QVector<TyyPlayerHandle> _player_handles;
+
+    // 每个分屏当前是否处于播放状态
+    QVector<bool> _screen_playing;
+
+    // 每个分屏对应的悬浮全屏按钮
+    QVector<QPushButton *> _video_full_screen_buttons;
+
     // 播放时间显示标签
     QLabel *_time_label;
 
@@ -321,6 +457,9 @@ private:
     // 删除播放列表选中项按钮
     QPushButton *_remove_button;
 
+    // 显示或隐藏播放列表按钮
+    QPushButton *_playlist_toggle_button;
+
     // 播放进度条
     QSlider *_progress_slider;
 
@@ -330,14 +469,35 @@ private:
     // 模拟播放进度的定时器
     QTimer *_play_timer;
 
+    // 视频悬浮按钮自动隐藏定时器
+    QTimer *_overlay_hide_timer;
+
     // 当前模拟媒体总时长，单位秒
     int _duration_seconds;
 
     // 当前分屏数量
     int _split_screen_count;
 
+    // 当前手动选择的分屏索引
+    int _selected_screen_index;
+
+    // 没有手动选择时，下一次默认播放使用的分屏索引
+    int _next_default_screen_index;
+
+    // 当前显示悬浮按钮的分屏索引
+    int _overlay_screen_index;
+
+    // 当前独立全屏的分屏索引
+    int _fullscreen_screen_index;
+
+    // 独立全屏前的分屏数量
+    int _fullscreen_saved_split_count;
+
     // 当前是否处于播放状态
     bool _is_playing;
+
+    // 播放列表当前是否显示
+    bool _playlist_visible;
 
     // 当前播放使用的底层播放器句柄
     TyyPlayerHandle _player_handle;

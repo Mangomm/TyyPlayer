@@ -595,12 +595,10 @@ void sdl_audio_callback(void *opaque, Uint8 *stream, int len)
 	is->_audio_write_buf_size = is->_audio_buf_size - is->_audio_buf_index;
 
 	if (!isnan(is->_audio_clock)) {
-		auto current_pts = is->_audio_clock - (double)(2 * is->_audio_hw_buf_size + is->_audio_write_buf_size) / is->_audio_tgt.bytes_per_sec;
 		is->_audclk.set_clock_at(is->_audio_clock - (double)(2 * is->_audio_hw_buf_size + is->_audio_write_buf_size) / is->_audio_tgt.bytes_per_sec,
 			is->_audio_clock_serial,
 			is->_audio_callback_time / 1000000.0);
 
-		TYYDEBUG("audio callback current_pts: {}, master pts: {}", current_pts, is->get_master_clock());
 		is->_extclk.sync_clock_to_slave(&is->_audclk);
 	}
 
@@ -645,6 +643,9 @@ int TyyVideoState::audio_open(void *opaque, int64_t wanted_channel_layout, int w
 	wanted_spec.callback = sdl_audio_callback;
 	wanted_spec.userdata = opaque;
 
+	TYYINFO("audio_open request, channel_layout: {}, channels: {}, sample_rate: {}, samples: {}",
+		wanted_channel_layout, wanted_spec.channels, wanted_spec.freq, wanted_spec.samples);
+
 	while (!(_audio_dev = SDL_OpenAudioDevice(NULL, 0, &wanted_spec, &spec, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE))) {
 		TYYERROR("SDL_OpenAudio ({} channels, {} Hz): {}", wanted_spec.channels, wanted_spec.freq, SDL_GetError());
 		wanted_spec.channels = next_nb_channels[FFMIN(7, wanted_spec.channels)];
@@ -652,7 +653,7 @@ int TyyVideoState::audio_open(void *opaque, int64_t wanted_channel_layout, int w
 			wanted_spec.freq = next_sample_rates[next_sample_rate_idx--];
 			wanted_spec.channels = wanted_nb_channels;
 			if (!wanted_spec.freq) {
-				av_log(NULL, AV_LOG_ERROR, "No more combinations to try, audio open failed\n");
+				TYYERROR("No more combinations to try, audio open failed");
 				return -1;
 			}
 		}
@@ -660,16 +661,14 @@ int TyyVideoState::audio_open(void *opaque, int64_t wanted_channel_layout, int w
 	}
 
 	if (spec.format != AUDIO_S16SYS) {
-		av_log(NULL, AV_LOG_ERROR,
-			"SDL advised audio format %d is not supported!\n", spec.format);
+		TYYERROR("SDL advised audio format {} is not supported", spec.format);
 		return -1;
 	}
 
 	if (spec.channels != wanted_spec.channels) {
 		wanted_channel_layout = av_get_default_channel_layout(spec.channels);
 		if (!wanted_channel_layout) {
-			av_log(NULL, AV_LOG_ERROR,
-				"SDL advised channel count %d is not supported!\n", spec.channels);
+			TYYERROR("SDL advised channel count {} is not supported", spec.channels);
 			return -1;
 		}
 	}
@@ -683,9 +682,14 @@ int TyyVideoState::audio_open(void *opaque, int64_t wanted_channel_layout, int w
 
 	audio_hw_params->bytes_per_sec = av_samples_get_buffer_size(NULL, audio_hw_params->channels, audio_hw_params->freq, audio_hw_params->fmt, 1);
 	if (audio_hw_params->bytes_per_sec <= 0 || audio_hw_params->frame_size <= 0) {
-		av_log(NULL, AV_LOG_ERROR, "av_samples_get_buffer_size failed\n");
+		TYYERROR("av_samples_get_buffer_size failed, bytes_per_sec: {}, frame_size: {}",
+			audio_hw_params->bytes_per_sec, audio_hw_params->frame_size);
 		return -1;
 	}
+
+	TYYINFO("audio_open success, device: {}, channels: {}, freq: {}, format: {}, samples: {}, size: {}, frame_size: {}, bytes_per_sec: {}",
+		_audio_dev, spec.channels, spec.freq, spec.format, spec.samples, spec.size,
+		audio_hw_params->frame_size, audio_hw_params->bytes_per_sec);
 
 	return spec.size;
 }
@@ -869,10 +873,6 @@ double TyyVideoState::get_rotation(AVStream *st)
 {
 
 	uint8_t* displaymatrix = av_stream_get_side_data(st, AV_PKT_DATA_DISPLAYMATRIX, NULL);
-	if (displaymatrix) {
-		printf("displaymatrix: %d\n", *displaymatrix);
-	}
-
 	double theta = 0;
 	if (displaymatrix)
 		theta = -av_display_rotation_get((int32_t*)displaymatrix);
@@ -1469,19 +1469,13 @@ int TyyVideoState::stream_component_open(int stream_index)
 
 	case AVMEDIA_TYPE_AUDIO: {
 #if CONFIG_AVFILTER
-		{
-			AVFilterContext *sink = NULL;
-
-			_audio_filter_src.channels = avctx->channels;
-			_audio_filter_src.channel_layout = get_valid_channel_layout(avctx->channel_layout, avctx->channels);
-			_audio_filter_src.fmt = avctx->sample_fmt;
-
-				goto fail;
-
-			sample_rate = av_buffersink_get_sample_rate(sink);
-			nb_channels = av_buffersink_get_channels(sink);
-			channel_layout = av_buffersink_get_channel_layout(sink);
-		}
+		_audio_filter_src.channels = avctx->channels;
+		_audio_filter_src.channel_layout = get_valid_channel_layout(avctx->channel_layout, avctx->channels);
+		_audio_filter_src.fmt = avctx->sample_fmt;
+		_audio_filter_src.freq = avctx->sample_rate;
+		sample_rate = avctx->sample_rate;
+		nb_channels = avctx->channels;
+		channel_layout = avctx->channel_layout;
 #else
 		sample_rate = avctx->sample_rate;
 		nb_channels = avctx->channels;
@@ -1816,6 +1810,16 @@ int read_thread(void *arg)
 
 	TYYTRACE("WINID: {}, start", is->_win_id);
 
+	{
+		std::unique_lock<std::mutex> locker(is->_sdl_init_mutex);
+		// fix: 避免阻塞Qt主线程，读线程内部等待写线程完成SDL_Init后再打开音频。
+		is->_sdl_init_cond.wait(locker, [is] { return is->_sdl_init_finished || is->_abort_request; });
+		if (!is->_sdl_init_success) {
+			TYYERROR("WINID: {}, read thread wait sdl init failed", is->_win_id);
+			return TYY_PLAYER_ERROR_PLAY_FAILED;
+		}
+	}
+
 	AVFormatContext *ic = NULL;
 	int i, ret;
 
@@ -2126,10 +2130,6 @@ int read_thread(void *arg)
 		}
 		else {
 			is->_eof = 0;
-			if(pkt->stream_index == is->_video_stream)
-				TYYINFO("read video pkt, nb: {}", is->_videoq._nb_packets);
-			else if(pkt->stream_index == is->_audio_stream)
-				TYYINFO("read audio pkt, nb: {}", is->_audioq._nb_packets);
 		}
 
 		stream_start_time = ic->streams[pkt->stream_index]->start_time;
@@ -2143,14 +2143,8 @@ int read_thread(void *arg)
 
 		if (pkt->stream_index == is->_audio_stream && pkt_in_play_range) {
 			is->_audioq.packet_queue_put(pkt);
-			auto avpts = pkt->pts * av_q2d(ic->streams[pkt->stream_index]->time_base);
-			TYYDEBUG("read thread audio pkt pts: {}(s)",
-				avpts);
 		}else if (pkt->stream_index == is->_video_stream && pkt_in_play_range
 			&& !(is->_video_st->disposition & AV_DISPOSITION_ATTACHED_PIC)) {
-			auto avpts = pkt->pts * av_q2d(ic->streams[pkt->stream_index]->time_base);
-			TYYDEBUG("read thread video pkt pts: {}(s)",
-				avpts);
 			is->_videoq.packet_queue_put(pkt);
 		}else if (pkt->stream_index == is->_subtitle_stream && pkt_in_play_range) {
 			is->_subtitleq.packet_queue_put(pkt);
@@ -2378,78 +2372,6 @@ bool TyyVideoState::init(const Properties &properties) {
 	avdevice_register_all();
 #endif
 	avformat_network_init();
-
-#if 0
-
-	flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER;
-
-	if (_audio_disable) {
-		flags &= ~SDL_INIT_AUDIO;
-	}
-	else {
-
-		if (!SDL_getenv("SDL_AUDIO_ALSA_SET_BUFFER_SIZE"))
-			SDL_setenv("SDL_AUDIO_ALSA_SET_BUFFER_SIZE", "1", 1);
-	}
-
-	if (_video_disable)
-		flags &= ~SDL_INIT_VIDEO;
-
-	int64_t api_t1;
-	api_t1 = av_gettime_relative();
-	static std::once_flag sdlflag;
-	call_once(sdlflag, [=] {
-		if (SDL_Init(flags)) {
-			TYYERROR("Could not initialize SDL, errno: {}", SDL_GetError());
-			TYYERROR("Did you set the DISPLAY variable?");
-			return false;
-		}
-	});
-	TYYDEBUG("SDL_Init successful, use time(ms): {}, url: {}", (av_gettime_relative() - api_t1) / 1000.0, _filename.c_str());
-
-	SDL_EventState(SDL_SYSWMEVENT, SDL_IGNORE);
-	SDL_EventState(SDL_USEREVENT, SDL_IGNORE);
-
-	av_init_packet(&flush_pkt);
-	flush_pkt.data = (uint8_t *)&flush_pkt;
-
-	TYYDEBUG("flush_pkt init ok");
-
-	_h_display_window = handle;
-
-	_window = SDL_CreateWindowFrom(_h_display_window);
-	if (!_window) {
-		TYYERROR("SDL_CreateWindowFrom get null window, hwnd: {}, err: {}",
-			fmt::ptr(_h_display_window), SDL_GetError());
-
-	}
-
-	SDL_ShowWindow(_window);
-	TYYDEBUG("SDL_ShowWindow windows");
-	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-	TYYDEBUG("SDL_SetHint linear");
-	if (_window) {
-
-		_renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-
-		if (!_renderer) {
-			TYYWARN("Failed to initialize a hardware accelerated renderer: {}", SDL_GetError());
-			_renderer = SDL_CreateRenderer(_window, -1, 0);
-		}
-		if (_renderer) {
-			if (!SDL_GetRendererInfo(_renderer, &_renderer_info)) {
-				TYYINFO("Initialized {} renderer.", _renderer_info.name);
-			}
-		}
-	}
-
-	if (!_window || !_renderer || !_renderer_info.num_texture_formats) {
-
-		TYYERROR("Failed to create window or renderer: {}, {}", SDL_GetError(), fmt::ptr(_window));
-		return false;
-	}
-
-#endif
 
 	_iformat = NULL;
 	_ytop = 0;
@@ -2778,8 +2700,6 @@ double TyyVideoState::compute_target_delay(double delay)
 	else {
 
 	}
-
-	TYYDEBUG("video: delay={:0.6f} A-V={:0.6f}", delay, -diff);
 
 	return delay;
 }
@@ -3114,13 +3034,7 @@ void TyyVideoState::video_display()
 		video_image_display();
 	}
 
-	int64_t t1 = av_gettime_relative();
 	SDL_RenderPresent(_renderer);
-	int64_t t2 = av_gettime_relative();
-	auto psta = _videoq.packet_queue_get_status();
-	int64_t t3 = av_gettime_relative();
-
-		TYYDEBUG("SDL_RenderPresent: {}(ms), packet_queue_get_status: {}(ms), nbPackets: {}", (t2 - t1) / 1000, (t3 - t2) / 1000, psta.nbPackets);
 
 	if (_capture_count > 0 && _capture_path.empty() == false) {
 		Frame *vp = _pictq.frame_queue_peek_last();
@@ -3156,17 +3070,12 @@ void video_refresh(void *opaque, double *remaining_time)
 
 		if (is->_pictq.frame_queue_nb_remaining() == 0) {
 
-			TYYDEBUG("_pictq.frame_queue_nb_remaining = 0");
 		}
 		else {
 			double last_duration, duration, delay;
 			Frame *vp, *lastvp;
-			int64_t t1, t3;
-			PacketQueue::pktStatus qStatus;
 			int framenum;
 
-			t1 = av_gettime_relative();
-			qStatus = is->_videoq.packet_queue_get_status();
 			framenum = is->_pictq.frame_queue_nb_remaining();
 
 			lastvp = is->_pictq.frame_queue_peek_last();
@@ -3175,14 +3084,12 @@ void video_refresh(void *opaque, double *remaining_time)
 			if (vp->serial != is->_videoq._serial) {
 
 				is->_pictq.frame_queue_next();
-				TYYDEBUG("111");
 				goto retry;
 			}
 
 			if (lastvp->serial != vp->serial) {
 
 				is->_frame_timer = av_gettime_relative() / 1000000.0;
-				TYYDEBUG("222");
 			}
 
 			if (is->_paused)
@@ -3193,16 +3100,11 @@ void video_refresh(void *opaque, double *remaining_time)
 
 			last_duration = is->vp_duration(lastvp, vp);
 
-			TYYDEBUG("lastvp pts: {}(s), vp pts: {}(s), last_duration: {}(s)",
-				lastvp->pts, vp->pts, last_duration);
-
 			delay = is->compute_target_delay(last_duration);
 
 			if (!(tyy_more(is->_play_speed, 0.99) && tyy_less(is->_play_speed, 1.01)) && is->_audio_stream < 0) {
 				delay = delay / is->_play_speed;
 			}
-
-			TYYDEBUG("video_refresh packet_queue_get_status() elp: {}(ms)", (av_gettime_relative() - t1) / 1000);
 
 			time = av_gettime_relative() / 1000000.0;
 
@@ -3210,8 +3112,6 @@ void video_refresh(void *opaque, double *remaining_time)
 
 				*remaining_time = FFMIN(is->_frame_timer + delay - time, *remaining_time);
 
-				TYYDEBUG("++++++true, last_duration: {}, time: {}", last_duration, time);
-				TYYDEBUG("333, time: {}(s), _frame_timer: {}(s), delay: {}(s)", time, is->_frame_timer, delay);
 				if (!is->_write_packet_fast) {
 					goto display;
 				}else {
@@ -3224,7 +3124,6 @@ void video_refresh(void *opaque, double *remaining_time)
 							goto display;
 						}
 
-						TYYDEBUG("++++++qStatus.nbPackets: {}, framenum: {}", qStatus.nbPackets, framenum);
 						if (framenum >= 3) {
 
 							delay = 0.000;
@@ -3236,16 +3135,10 @@ void video_refresh(void *opaque, double *remaining_time)
 							*remaining_time = delay;
 #ifdef  _WIN32
 							timeBeginPeriod(1);
-							auto ttt = av_gettime_relative();
 							Sleep((int64_t)(*remaining_time * 1000.0));
-							TYYDEBUG("2 request sleep time: {}(us), actual sleep time: {}(ms)",
-								(int64_t)(*remaining_time * 1000000.0), (av_gettime_relative() - ttt) / 1000.0);
 							timeEndPeriod(1);
 #else
-							auto ttt = av_gettime_relative();
 							av_usleep((int64_t)(*remaining_time * 1000000.0));
-							TYYDEBUG("2 request sleep time: {}(us), actual sleep time: {}(ms)",
-								(int64_t)(*remaining_time * 1000000.0), (av_gettime_relative() - ttt) / 1000.0);
 #endif
 
 							*remaining_time = 0;
@@ -3255,16 +3148,10 @@ void video_refresh(void *opaque, double *remaining_time)
 							*remaining_time = delay;
 #ifdef  _WIN32
 							timeBeginPeriod(1);
-							auto ttt = av_gettime_relative();
 							Sleep((int64_t)(*remaining_time * 1000.0));
-							TYYDEBUG("1 request sleep time: {}(us), actual sleep time: {}(ms)",
-								(int64_t)(*remaining_time * 1000000.0), (av_gettime_relative() - ttt) / 1000.0);
 							timeEndPeriod(1);
 #else
-							auto ttt = av_gettime_relative();
 							av_usleep((int64_t)(*remaining_time * 1000000.0));
-							TYYDEBUG("1 request sleep time: {}(us), actual sleep time: {}(ms)",
-								(int64_t)(*remaining_time * 1000000.0), (av_gettime_relative() - ttt) / 1000.0);
 #endif
 							*remaining_time = 0;
 
@@ -3274,7 +3161,6 @@ void video_refresh(void *opaque, double *remaining_time)
 
 							delay = (*remaining_time);
 							*remaining_time = delay;
-							TYYDEBUG("+++0");
 							goto display;
 						}
 
@@ -3283,26 +3169,15 @@ void video_refresh(void *opaque, double *remaining_time)
 
 			}
 			else {
-				TYYDEBUG("++++++false");
 			}
 
 			if (is->_write_packet_fast && is->get_master_sync_type() == AV_SYNC_VIDEO_MASTER && is->_realtime) {
 				if (framenum >= VIDEO_PICTURE_QUEUE_SIZE) {
-					TYYDEBUG("framenum too much: {}", framenum);
 					delay = 0.000;
 					*remaining_time = delay;
 				}
 			}
 
-			{
-				static int64_t last = av_gettime_relative();
-				auto now	 = av_gettime_relative();
-				TYYDEBUG("++packets: {}, framenum: {}, elp(ms): {}, time: {}, ft: {}, delay: {}, rt: {}, vframe: {}",
-					qStatus.nbPackets, framenum, (now - last)/1000.0, time, is->_frame_timer, delay, *remaining_time, is->_pictq.frame_queue_nb_remaining());
-				last = now;
-			}
-
-			t1 = av_gettime_relative();
 			is->_frame_timer += delay;
 			if (delay > 0 && time - is->_frame_timer > AV_SYNC_THRESHOLD_MAX) {
 				is->_frame_timer = time;
@@ -3331,7 +3206,6 @@ void video_refresh(void *opaque, double *remaining_time)
 			}
 
 			if (is->_subtitle_st) {
-				t3 = av_gettime_relative();
 				while (is->_subpq.frame_queue_nb_remaining() > 0) {
 
 					sp = is->_subpq.frame_queue_peek();
@@ -3373,12 +3247,10 @@ void video_refresh(void *opaque, double *remaining_time)
 
 				}
 
-				TYYTRACE("_subtitle_st handle time(ms): {}", (av_gettime_relative() - t3) / 1000.0);
 			}
 
 			is->_pictq.frame_queue_next();
 			is->_force_refresh = 1;
-			TYYDEBUG("_pictq.frame_queue_next() elp: {}(ms)", (av_gettime_relative() - t1) / 1000);
 
 			if (is->_step && !is->_paused)
 				is->stream_toggle_pause();
@@ -3388,9 +3260,7 @@ void video_refresh(void *opaque, double *remaining_time)
 	display:
 
 		if (!is->_display_disable && is->_force_refresh && is->_show_mode == TyyVideoState::SHOW_MODE_VIDEO && is->_pictq._rindex_shown) {
-			int64_t tvideo_display = av_gettime_relative();
 			is->video_display();
-			TYYDEBUG("video_display() elp: {}(ms)", (av_gettime_relative() - tvideo_display) / 1000);
 		}
 
 	}
@@ -3442,7 +3312,6 @@ void video_refresh(void *opaque, double *remaining_time)
 
 void refresh_loop_wait_event(TyyVideoState *is, SDL_Event *event) {
 	double remaining_time = 0.0;
-	int64_t t1;
 
 	while (1) {
 
@@ -3470,18 +3339,14 @@ void refresh_loop_wait_event(TyyVideoState *is, SDL_Event *event) {
 		}
 
 		if (remaining_time > 0.0) {
-			int64_t t1remaining_time = av_gettime_relative();
 #ifdef  _WIN32
-			auto tb = timeBeginPeriod(1);
+			timeBeginPeriod(1);
 			Sleep((int64_t)(remaining_time * 1000.0));
 			timeEndPeriod(1);
-			TYYDEBUG("timeBeginPeriod set ret, {}", tb == TIMERR_NOERROR);
 #else
 
 			av_usleep((int64_t)(remaining_time * 1000000.0));
 #endif
-			TYYDEBUG("request sleep time: {}(ms), actual sleep time: {}(ms)",
-				(int64_t)(remaining_time * 1000.0), (av_gettime_relative() - t1remaining_time) / 1000.0);
 		}
 
 		remaining_time = REFRESH_RATE;
@@ -3490,9 +3355,7 @@ void refresh_loop_wait_event(TyyVideoState *is, SDL_Event *event) {
 				|| is->_force_refresh)
 			) {
 
-			t1 = av_gettime_relative();
 			video_refresh(is, &remaining_time);
-			TYYDEBUG("video_refresh elp: {}(ms)", (av_gettime_relative() - t1) / 1000.0);
 		}
 
 	}
@@ -3512,8 +3375,20 @@ int write_thread(void *arg) {
 
 	if ((cur_stream->_window == NULL || cur_stream->_renderer == NULL) && cur_stream->sdl_init() == false) {
 		TYYERROR("write_thread1 sdl_init fail");
+		{
+			std::lock_guard<std::mutex> locker(cur_stream->_sdl_init_mutex);
+			cur_stream->_sdl_init_finished = true;
+			cur_stream->_sdl_init_success = false;
+		}
+		cur_stream->_sdl_init_cond.notify_all();
 		return -1;
 	}
+	{
+		std::lock_guard<std::mutex> locker(cur_stream->_sdl_init_mutex);
+		cur_stream->_sdl_init_finished = true;
+		cur_stream->_sdl_init_success = true;
+	}
+	cur_stream->_sdl_init_cond.notify_all();
 
 	for (;;) {
 		if (cur_stream->_abort_request_w > 0 && cur_stream->_abort_request == 1) {
@@ -3595,17 +3470,26 @@ bool TyyVideoState::play(const Properties &properties, int &return_val) {
 		return false;
 	}
 
-	_read_tid = SDL_CreateThread(read_thread, "read_thread", this);
-	if (!_read_tid) {
-		return_val = TYY_PLAYER_ERROR_PLAY_FAILED;
-		TYYERROR("create read thread failed, errno: {}", SDL_GetError());
-		return false;
+	{
+		std::lock_guard<std::mutex> locker(_sdl_init_mutex);
+		_sdl_init_finished = false;
+		_sdl_init_success = false;
 	}
 
+	// fix: SDL_Init必须在渲染写线程执行，读线程打开音频前等待写线程初始化完成。
 	_write_tid = SDL_CreateThread(write_thread, "write_thread", this);
 	if (!_write_tid) {
 		return_val = TYY_PLAYER_ERROR_PLAY_FAILED;
 		TYYERROR("create write thread failed, errno: {}", SDL_GetError());
+		return false;
+	}
+
+	_read_tid = SDL_CreateThread(read_thread, "read_thread", this);
+	if (!_read_tid) {
+		return_val = TYY_PLAYER_ERROR_PLAY_FAILED;
+		TYYERROR("create read thread failed, errno: {}", SDL_GetError());
+		_abort_request_w = 1;
+		_sdl_init_cond.notify_all();
 		return false;
 	}
 
@@ -3616,63 +3500,63 @@ bool TyyVideoState::play(const Properties &properties, int &return_val) {
 	return true;
 }
 
-bool TyyVideoState::play(int type, void* data, int data_size, int &return_val) {
-	(void)type;
+//bool TyyVideoState::play(int type, void* data, int data_size, int &return_val) {
+//	(void)type;
 
-	TYYTRACE("WINID: {}, start", _win_id);
+//	TYYTRACE("WINID: {}, start", _win_id);
 
-	std::lock_guard<std::mutex> lg(_mutex_play_close);
+//	std::lock_guard<std::mutex> lg(_mutex_play_close);
 
-	if (!data || data_size <= 0) {
-		return_val = TYY_PLAYER_ERROR_INVALID_PARAM;
-		return false;
-	}
+//	if (!data || data_size <= 0) {
+//		return_val = TYY_PLAYER_ERROR_INVALID_PARAM;
+//		return false;
+//	}
 
-	if (_player_state) {
-		return_val = TYY_PLAYER_ERROR_STATE_FAILED;
-		return false;
-	}
+//	if (_player_state) {
+//		return_val = TYY_PLAYER_ERROR_STATE_FAILED;
+//		return false;
+//	}
 
-	playerParam *ffParam = (playerParam*)data;
-	Properties properties;
-	properties.set_property(TYY_VIDEO_STATE_PROPERTY_WIN_ID,
-						   static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ffParam->playStruct.playWnd)));
-	properties.set_property(TYY_VIDEO_STATE_PROPERTY_URL, ffParam->playStruct.url);
-	bool ret = init(properties);
-	if (ret == false) {
-		return_val = TYY_PLAYER_ERROR_STATE_FAILED;
-		TYYERROR("TyyVideoState init failed");
-		return false;
-	}
+//	playerParam *ffParam = (playerParam*)data;
+//	Properties properties;
+//	properties.set_property(TYY_VIDEO_STATE_PROPERTY_WIN_ID,
+//						   static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ffParam->playStruct.playWnd)));
+//	properties.set_property(TYY_VIDEO_STATE_PROPERTY_URL, ffParam->playStruct.url);
+//	bool ret = init(properties);
+//	if (ret == false) {
+//		return_val = TYY_PLAYER_ERROR_STATE_FAILED;
+//		TYYERROR("TyyVideoState init failed");
+//		return false;
+//	}
 
-	ret = open_input();
-	if (ret != 0) {
-		return_val = TYY_PLAYER_ERROR_OPEN_INPUT_FAILED;
-		TYYERROR("open_input failed");
-		deinit();
-		return false;
-	}
+//	ret = open_input();
+//	if (ret != 0) {
+//		return_val = TYY_PLAYER_ERROR_OPEN_INPUT_FAILED;
+//		TYYERROR("open_input failed");
+//		deinit();
+//		return false;
+//	}
 
-	_read_tid = SDL_CreateThread(read_thread, "read_thread", this);
-	if (!_read_tid) {
-		return_val = TYY_PLAYER_ERROR_PLAY_FAILED;
-		TYYERROR("create read thread failed, errno: {}", SDL_GetError());
-		return false;
-	}
+//	_read_tid = SDL_CreateThread(read_thread, "read_thread", this);
+//	if (!_read_tid) {
+//		return_val = TYY_PLAYER_ERROR_PLAY_FAILED;
+//		TYYERROR("create read thread failed, errno: {}", SDL_GetError());
+//		return false;
+//	}
 
-	_write_tid = SDL_CreateThread(write_thread, "write_thread", this);
-	if (!_write_tid) {
-		return_val = TYY_PLAYER_ERROR_PLAY_FAILED;
-		TYYERROR("create write thread failed, errno: {}", SDL_GetError());
-		return false;
-	}
+//	_write_tid = SDL_CreateThread(write_thread, "write_thread", this);
+//	if (!_write_tid) {
+//		return_val = TYY_PLAYER_ERROR_PLAY_FAILED;
+//		TYYERROR("create write thread failed, errno: {}", SDL_GetError());
+//		return false;
+//	}
 
-	TYYTRACE("end");
+//	TYYTRACE("end");
 
-	_player_state = 1;
-	return_val = 0;
-	return true;
-}
+//	_player_state = 1;
+//	return_val = 0;
+//	return true;
+//}
 
 void TyyVideoState::stream_component_close(int stream_index)
 {

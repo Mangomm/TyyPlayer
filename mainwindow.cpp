@@ -69,6 +69,7 @@ MainWindow::MainWindow(QWidget *parent)
       _time_label(nullptr),
       _playlist_widget(nullptr),
       _play_button(nullptr),
+      _pause_button(nullptr),
       _stop_button(nullptr),
       _add_button(nullptr),
       _remove_button(nullptr),
@@ -137,6 +138,11 @@ void MainWindow::init_ui()
     _play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
     _play_button->setToolTip("Play");
 
+    _pause_button = new QPushButton(_control_widget);
+    _pause_button->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
+    _pause_button->setToolTip("Pause");
+    _pause_button->setEnabled(false);
+
     _stop_button = new QPushButton(_control_widget);
     _stop_button->setIcon(style()->standardIcon(QStyle::SP_MediaStop));
     _stop_button->setToolTip("Stop");
@@ -162,6 +168,7 @@ void MainWindow::init_ui()
 
     button_layout->addWidget(backward_button);
     button_layout->addWidget(_play_button);
+    button_layout->addWidget(_pause_button);
     button_layout->addWidget(_stop_button);
     button_layout->addWidget(forward_button);
     button_layout->addSpacing(12);
@@ -225,6 +232,7 @@ void MainWindow::init_connections()
     connect(_remove_button, SIGNAL(clicked()), this, SLOT(remove_selected_media()));
     connect(_playlist_toggle_button, SIGNAL(clicked()), this, SLOT(toggle_playlist_panel()));
     connect(_play_button, SIGNAL(clicked()), this, SLOT(toggle_play()));
+    connect(_pause_button, SIGNAL(clicked()), this, SLOT(toggle_pause()));
     connect(_stop_button, SIGNAL(clicked()), this, SLOT(stop_play()));
     connect(_progress_slider, SIGNAL(sliderMoved(int)), this, SLOT(set_play_position(int)));
     connect(_volume_slider, SIGNAL(valueChanged(int)), this, SLOT(set_volume_value(int)));
@@ -257,6 +265,7 @@ void MainWindow::init_video_grid(QWidget *parent)
         _video_labels.push_back(video_label);
         _player_handles.push_back(nullptr);
         _screen_playing.push_back(false);
+        _screen_paused.push_back(false);
         update_video_label_style(index);
 
         QPushButton *full_screen_button = new QPushButton(_video_widget);
@@ -377,6 +386,45 @@ void MainWindow::toggle_play()
     int old_screen_index = _selected_screen_index;
     _selected_screen_index = -1;
     update_video_label_style(old_screen_index);
+    update_pause_button_state();
+}
+
+void MainWindow::toggle_pause()
+{
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = _player_handle;
+    if (_selected_screen_index >= 0 && _selected_screen_index < _player_handles.size())
+    {
+        screen_index = _selected_screen_index;
+        player_handle = _player_handles[_selected_screen_index];
+    }
+    else
+    {
+        for (int index = 0; index < _player_handles.size(); ++index)
+        {
+            if (_player_handles[index] == player_handle)
+            {
+                screen_index = index;
+                break;
+            }
+        }
+    }
+
+    if (player_handle == nullptr || screen_index < 0 || screen_index >= _screen_paused.size())
+    {
+        return;
+    }
+
+    bool next_paused = !_screen_paused[screen_index];
+    int ret = tyy_player_pause(player_handle, next_paused ? 1 : 0);
+    if (ret != TYY_PLAYER_ERROR_OK)
+    {
+        QMessageBox::warning(this, "TyyPlayer", QString("Pause media failed, error=%1").arg(ret));
+        return;
+    }
+
+    _screen_paused[screen_index] = next_paused;
+    update_pause_button_state();
 }
 
 void MainWindow::stop_play()
@@ -732,13 +780,57 @@ void MainWindow::update_play_state(bool is_playing)
     {
         _play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
         _play_button->setToolTip("Play");
+        _pause_button->setEnabled(true);
         _play_timer->start();
     }
     else
     {
         _play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
         _play_button->setToolTip("Play");
+        _pause_button->setEnabled(false);
         _play_timer->stop();
+    }
+
+    update_pause_button_state();
+}
+
+void MainWindow::update_pause_button_state()
+{
+    if (_pause_button == nullptr)
+    {
+        return;
+    }
+
+    int screen_index = -1;
+    if (_selected_screen_index >= 0 && _selected_screen_index < _screen_playing.size() &&
+        _screen_playing[_selected_screen_index])
+    {
+        screen_index = _selected_screen_index;
+    }
+    else if (_player_handle != nullptr)
+    {
+        for (int index = 0; index < _player_handles.size(); ++index)
+        {
+            if (_player_handles[index] == _player_handle && index < _screen_playing.size() && _screen_playing[index])
+            {
+                screen_index = index;
+                break;
+            }
+        }
+    }
+
+    bool can_pause = screen_index >= 0 && screen_index < _screen_paused.size();
+    _pause_button->setEnabled(can_pause);
+
+    if (can_pause && _screen_paused[screen_index])
+    {
+        _pause_button->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+        _pause_button->setToolTip("Resume");
+    }
+    else
+    {
+        _pause_button->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
+        _pause_button->setToolTip("Pause");
     }
 }
 
@@ -828,6 +920,7 @@ void MainWindow::select_video_screen(int screen_index)
     _selected_screen_index = screen_index;
     update_video_label_style(old_screen_index);
     update_video_label_style(_selected_screen_index);
+    update_pause_button_state();
 }
 
 void MainWindow::update_video_label_style(int screen_index)
@@ -1173,8 +1266,10 @@ int MainWindow::start_current_media(int screen_index)
 
     _player_handles[screen_index] = player_handle;
     _screen_playing[screen_index] = true;
+    _screen_paused[screen_index] = false;
     _player_handle = player_handle;
     update_video_label_style(screen_index);
+    update_pause_button_state();
 
     return TYY_PLAYER_ERROR_OK;
 }
@@ -1206,6 +1301,10 @@ void MainWindow::release_screen_player(int screen_index)
     }
 
     _screen_playing[screen_index] = false;
+    if (screen_index < _screen_paused.size())
+    {
+        _screen_paused[screen_index] = false;
+    }
     if (_overlay_screen_index == screen_index)
     {
         hide_video_overlay();
@@ -1219,6 +1318,7 @@ void MainWindow::release_screen_player(int screen_index)
     {
         _video_labels[screen_index]->setUpdatesEnabled(true);
     }
+    update_pause_button_state();
 }
 
 int MainWindow::get_split_columns(int split_count) const

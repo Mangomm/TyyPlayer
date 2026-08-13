@@ -84,6 +84,15 @@ private slots:
     void toggle_play();
 
     /**
+    * @brief 切换暂停和恢复状态
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void toggle_pause();
+
+    /**
     * @brief 停止当前播放的视频
     * @author: tyy
     * @param 无
@@ -245,6 +254,15 @@ private:
     * @note:
     */
     void update_play_state(bool is_playing);
+
+    /**
+    * @brief 更新暂停和恢复按钮状态
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void update_pause_button_state();
 
     /**
     * @brief 更新当前媒体在视频区域的显示
@@ -436,6 +454,9 @@ private:
     // 每个分屏当前是否处于播放状态
     QVector<bool> _screen_playing;
 
+    // 每个分屏当前是否处于暂停状态
+    QVector<bool> _screen_paused;
+
     // 每个分屏对应的悬浮全屏按钮
     QVector<QPushButton *> _video_full_screen_buttons;
 
@@ -447,6 +468,9 @@ private:
 
     // 播放和暂停按钮
     QPushButton *_play_button;
+
+    // 暂停和恢复按钮
+    QPushButton *_pause_button;
 
     // 停止播放按钮
     QPushButton *_stop_button;

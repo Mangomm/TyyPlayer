@@ -112,6 +112,18 @@ int TyyPlayerCore::seek(int forward, int seek_interval)
     return TYY_PLAYER_ERROR_OK;
 }
 
+int TyyPlayerCore::step_to_next_frame()
+{
+    if (!_is_started)
+    {
+        return TYY_PLAYER_ERROR_STATE_FAILED;
+    }
+
+    _video_state->step_next_frame();
+    _is_paused = true;
+    return TYY_PLAYER_ERROR_OK;
+}
+
 int TyyPlayerCore::stop()
 {
     if (!_is_started)

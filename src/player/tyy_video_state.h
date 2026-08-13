@@ -186,6 +186,8 @@ enum {
 
 		void toggle_pause();
 
+		void step_next_frame();
+
 		bool set_audio_volume(int volume);
 
 		bool set_mute(bool status);

@@ -120,6 +120,15 @@ private slots:
     void seek_forward();
 
     /**
+    * @brief 单步播放下一帧
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void step_forward();
+
+    /**
     * @brief 设置播放进度位置
     * @author: tyy
     * @param[in] position 播放进度，单位秒
@@ -480,6 +489,9 @@ private:
 
     // 暂停和恢复按钮
     QPushButton *_pause_button;
+
+    // 单步播放下一帧按钮
+    QPushButton *_step_button;
 
     // 停止播放按钮
     QPushButton *_stop_button;

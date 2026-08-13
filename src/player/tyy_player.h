@@ -86,6 +86,15 @@ public:
     int seek(int forward, int seek_interval);
 
     /**
+    * @brief 单步播放下一帧
+    * @author: tyy
+    * @param 无
+    * @return 错误码
+    * @note:
+    */
+    int step_to_next_frame();
+
+    /**
     * @brief 停止播放
     * @author: tyy
     * @param 无

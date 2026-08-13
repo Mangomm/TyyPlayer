@@ -126,6 +126,15 @@ TYY_PLAYER_API int tyy_player_pause(TyyPlayerHandle handle, int pause);
 TYY_PLAYER_API int tyy_player_seek(TyyPlayerHandle handle, int forward, int seek_interval);
 
 /**
+* @brief 单步播放下一帧
+* @author: tyy
+* @param[in] handle 播放器句柄
+* @return 错误码
+* @note:
+*/
+TYY_PLAYER_API int tyy_player_step_to_next_frame(TyyPlayerHandle handle);
+
+/**
 * @brief 停止播放
 * @author: tyy
 * @param[in] handle 播放器句柄

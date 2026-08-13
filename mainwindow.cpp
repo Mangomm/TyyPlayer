@@ -70,6 +70,7 @@ MainWindow::MainWindow(QWidget *parent)
       _playlist_widget(nullptr),
       _play_button(nullptr),
       _pause_button(nullptr),
+      _step_button(nullptr),
       _stop_button(nullptr),
       _add_button(nullptr),
       _remove_button(nullptr),
@@ -143,6 +144,11 @@ void MainWindow::init_ui()
     _pause_button->setToolTip("Pause");
     _pause_button->setEnabled(false);
 
+    _step_button = new QPushButton(_control_widget);
+    _step_button->setIcon(style()->standardIcon(QStyle::SP_MediaSkipForward));
+    _step_button->setToolTip("Next Frame");
+    _step_button->setEnabled(false);
+
     _stop_button = new QPushButton(_control_widget);
     _stop_button->setIcon(style()->standardIcon(QStyle::SP_MediaStop));
     _stop_button->setToolTip("Stop");
@@ -169,6 +175,7 @@ void MainWindow::init_ui()
     button_layout->addWidget(backward_button);
     button_layout->addWidget(_play_button);
     button_layout->addWidget(_pause_button);
+    button_layout->addWidget(_step_button);
     button_layout->addWidget(_stop_button);
     button_layout->addWidget(forward_button);
     button_layout->addSpacing(12);
@@ -233,6 +240,7 @@ void MainWindow::init_connections()
     connect(_playlist_toggle_button, SIGNAL(clicked()), this, SLOT(toggle_playlist_panel()));
     connect(_play_button, SIGNAL(clicked()), this, SLOT(toggle_play()));
     connect(_pause_button, SIGNAL(clicked()), this, SLOT(toggle_pause()));
+    connect(_step_button, SIGNAL(clicked()), this, SLOT(step_forward()));
     connect(_stop_button, SIGNAL(clicked()), this, SLOT(stop_play()));
     connect(_progress_slider, SIGNAL(sliderMoved(int)), this, SLOT(set_play_position(int)));
     connect(_volume_slider, SIGNAL(valueChanged(int)), this, SLOT(set_volume_value(int)));
@@ -478,6 +486,26 @@ void MainWindow::seek_forward()
         position = _duration_seconds;
     }
     set_play_position(position);
+}
+
+void MainWindow::step_forward()
+{
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
+    if (player_handle == nullptr || screen_index < 0 || screen_index >= _screen_paused.size())
+    {
+        return;
+    }
+
+    int ret = tyy_player_step_to_next_frame(player_handle);
+    if (ret != TYY_PLAYER_ERROR_OK)
+    {
+        QMessageBox::warning(this, "TyyPlayer", QString("Step media failed, error=%1").arg(ret));
+        return;
+    }
+
+    _screen_paused[screen_index] = true;
+    update_pause_button_state();
 }
 
 void MainWindow::set_play_position(int position)
@@ -828,6 +856,10 @@ void MainWindow::update_pause_button_state()
 
     bool can_pause = screen_index >= 0 && screen_index < _screen_paused.size();
     _pause_button->setEnabled(can_pause);
+    if (_step_button != nullptr)
+    {
+        _step_button->setEnabled(can_pause);
+    }
 
     if (can_pause && _screen_paused[screen_index])
     {

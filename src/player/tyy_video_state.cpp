@@ -1562,6 +1562,11 @@ void TyyVideoState::toggle_pause()
 	_step = 0;
 }
 
+void TyyVideoState::step_next_frame()
+{
+	step_to_next_frame();
+}
+
 void TyyVideoState::stream_toggle_pause()
 {
 	if (_paused) {

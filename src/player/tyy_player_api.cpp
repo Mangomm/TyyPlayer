@@ -63,6 +63,16 @@ int tyy_player_pause(TyyPlayerHandle handle, int pause)
     return player->pause(pause);
 }
 
+int tyy_player_seek(TyyPlayerHandle handle, int forward, int seek_interval)
+{
+    TyyPlayerCore *player = static_cast<TyyPlayerCore *>(handle);
+    if (player == nullptr)
+    {
+        return TYY_PLAYER_ERROR_INVALID_PARAM;
+    }
+    return player->seek(forward, seek_interval);
+}
+
 int tyy_player_stop(TyyPlayerHandle handle)
 {
     TyyPlayerCore *player = static_cast<TyyPlayerCore *>(handle);

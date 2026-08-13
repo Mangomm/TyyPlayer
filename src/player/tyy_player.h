@@ -76,6 +76,16 @@ public:
     int pause(int pause);
 
     /**
+    * @brief 快进或快退
+    * @author: tyy
+    * @param[in] forward 是否前进
+    * @param[in] seek_interval 跳转间隔，单位秒
+    * @return 错误码
+    * @note:
+    */
+    int seek(int forward, int seek_interval);
+
+    /**
     * @brief 停止播放
     * @author: tyy
     * @param 无

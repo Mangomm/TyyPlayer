@@ -101,6 +101,17 @@ int TyyPlayerCore::pause(int pause)
     return TYY_PLAYER_ERROR_OK;
 }
 
+int TyyPlayerCore::seek(int forward, int seek_interval)
+{
+    if (!_is_started)
+    {
+        return TYY_PLAYER_ERROR_STATE_FAILED;
+    }
+
+    _video_state->on_user_fb_seek(forward ? 2 : 1, seek_interval);
+    return TYY_PLAYER_ERROR_OK;
+}
+
 int TyyPlayerCore::stop()
 {
     if (!_is_started)

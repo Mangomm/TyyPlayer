@@ -265,6 +265,15 @@ private:
     void update_pause_button_state();
 
     /**
+    * @brief 获取当前操作的播放器句柄
+    * @author: tyy
+    * @param[out] screen_index 当前分屏索引
+    * @return 播放器句柄
+    * @note:
+    */
+    TyyPlayerHandle get_current_player_handle(int *screen_index) const;
+
+    /**
     * @brief 更新当前媒体在视频区域的显示
     * @author: tyy
     * @param[in] current_row 当前播放列表行号

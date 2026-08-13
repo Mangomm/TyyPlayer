@@ -392,24 +392,7 @@ void MainWindow::toggle_play()
 void MainWindow::toggle_pause()
 {
     int screen_index = -1;
-    TyyPlayerHandle player_handle = _player_handle;
-    if (_selected_screen_index >= 0 && _selected_screen_index < _player_handles.size())
-    {
-        screen_index = _selected_screen_index;
-        player_handle = _player_handles[_selected_screen_index];
-    }
-    else
-    {
-        for (int index = 0; index < _player_handles.size(); ++index)
-        {
-            if (_player_handles[index] == player_handle)
-            {
-                screen_index = index;
-                break;
-            }
-        }
-    }
-
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
     if (player_handle == nullptr || screen_index < 0 || screen_index >= _screen_paused.size())
     {
         return;
@@ -455,7 +438,19 @@ void MainWindow::stop_play()
 
 void MainWindow::seek_backward()
 {
-    int position = _progress_slider->value() - 10;
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
+    if (player_handle != nullptr)
+    {
+        int ret = tyy_player_seek(player_handle, 0, 5);
+        if (ret != TYY_PLAYER_ERROR_OK)
+        {
+            QMessageBox::warning(this, "TyyPlayer", QString("Seek media failed, error=%1").arg(ret));
+            return;
+        }
+    }
+
+    int position = _progress_slider->value() - 5;
     if (position < 0)
     {
         position = 0;
@@ -465,7 +460,19 @@ void MainWindow::seek_backward()
 
 void MainWindow::seek_forward()
 {
-    int position = _progress_slider->value() + 10;
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
+    if (player_handle != nullptr)
+    {
+        int ret = tyy_player_seek(player_handle, 1, 5);
+        if (ret != TYY_PLAYER_ERROR_OK)
+        {
+            QMessageBox::warning(this, "TyyPlayer", QString("Seek media failed, error=%1").arg(ret));
+            return;
+        }
+    }
+
+    int position = _progress_slider->value() + 5;
     if (position > _duration_seconds)
     {
         position = _duration_seconds;
@@ -832,6 +839,35 @@ void MainWindow::update_pause_button_state()
         _pause_button->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
         _pause_button->setToolTip("Pause");
     }
+}
+
+TyyPlayerHandle MainWindow::get_current_player_handle(int *screen_index) const
+{
+    int current_screen_index = -1;
+    TyyPlayerHandle player_handle = _player_handle;
+    if (_selected_screen_index >= 0 && _selected_screen_index < _player_handles.size())
+    {
+        current_screen_index = _selected_screen_index;
+        player_handle = _player_handles[_selected_screen_index];
+    }
+    else
+    {
+        for (int index = 0; index < _player_handles.size(); ++index)
+        {
+            if (_player_handles[index] == player_handle)
+            {
+                current_screen_index = index;
+                break;
+            }
+        }
+    }
+
+    if (screen_index != nullptr)
+    {
+        *screen_index = current_screen_index;
+    }
+
+    return player_handle;
 }
 
 void MainWindow::update_current_media(int current_row)

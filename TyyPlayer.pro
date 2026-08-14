@@ -28,7 +28,9 @@ SOURCES += \
     src/player/tyy_properties.cpp \
     src/player/tyy_sonic.cpp \
     src/player/tyy_video_state.cpp \
-    ui/media_info_dialog.cpp
+    ui/media_info_dialog.cpp \
+    ui/preview_widget.cpp \
+    ui/video_frame_extractor.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -41,7 +43,9 @@ HEADERS += \
     src/player/tyy_properties.h \
     src/player/tyy_sonic.h \
     src/player/tyy_video_state.h \
-    ui/media_info_dialog.h
+    ui/media_info_dialog.h \
+    ui/preview_widget.h \
+    ui/video_frame_extractor.h
 
 FORMS += \
     mainwindow.ui

@@ -1,6 +1,8 @@
 ﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "media_info_dialog.h"
+#include "preview_widget.h"
+#include "video_frame_extractor.h"
 
 #include <QAbstractItemView>
 #include <QAction>
@@ -86,6 +88,11 @@ MainWindow::MainWindow(QWidget *parent)
       _progress_slider(nullptr),
       _volume_slider(nullptr),
       _speed_combo_box(nullptr),
+      _preview_widget(nullptr),
+      _preview_extractor(nullptr),
+      _preview_timer(nullptr),
+      _preview_position(QPoint()),
+      _preview_seconds(0),
       _decoder_type(TYY_PLAYER_DECODER_TYPE_SOFTWARE),
       _play_timer(nullptr),
       _overlay_hide_timer(nullptr),
@@ -110,6 +117,10 @@ MainWindow::~MainWindow()
 {
     save_playlist();
     release_current_player();
+    delete _preview_extractor;
+    _preview_extractor = nullptr;
+    delete _preview_widget;
+    _preview_widget = nullptr;
     delete ui;
 }
 
@@ -137,6 +148,15 @@ void MainWindow::init_ui()
     _progress_slider = new QSlider(Qt::Horizontal, _control_widget);
     _progress_slider->setRange(0, _duration_seconds);
     _progress_slider->setEnabled(false);
+    _progress_slider->setMouseTracking(true);
+    _progress_slider->installEventFilter(this);
+
+    _preview_widget = new PreviewWidget(this);
+    _preview_widget->hide();
+    _preview_extractor = new VideoFrameExtractor();
+    _preview_timer = new QTimer(this);
+    _preview_timer->setSingleShot(true);
+    _preview_timer->setInterval(150);
 
     QHBoxLayout *button_layout = new QHBoxLayout();
     button_layout->setContentsMargins(0, 0, 0, 0);
@@ -302,6 +322,7 @@ void MainWindow::init_connections()
     connect(_playlist_widget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(play_playlist_item(QListWidgetItem*)));
     connect(_video_widget, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(show_split_menu(QPoint)));
     connect(_overlay_hide_timer, SIGNAL(timeout()), this, SLOT(hide_video_overlay()));
+    connect(_preview_timer, SIGNAL(timeout()), this, SLOT(update_progress_preview()));
 }
 
 void MainWindow::init_video_grid(QWidget *parent)
@@ -661,6 +682,41 @@ void MainWindow::on_play_timer()
     }
 
     set_play_position(position);
+}
+
+void MainWindow::update_progress_preview()
+{
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
+    if (player_handle == nullptr || screen_index < 0 || screen_index >= _screen_file_names.size() ||
+        _screen_file_names[screen_index].isEmpty())
+    {
+        hide_progress_preview();
+        return;
+    }
+
+    if (_preview_extractor == nullptr || _preview_widget == nullptr)
+    {
+        return;
+    }
+
+    if (!_preview_extractor->set_file(_screen_file_names[screen_index]))
+    {
+        hide_progress_preview();
+        return;
+    }
+
+    QImage image;
+    if (!_preview_extractor->extract_frame(_preview_seconds, &image))
+    {
+        hide_progress_preview();
+        return;
+    }
+
+    _preview_widget->set_preview(image, format_time(_preview_seconds));
+    QPoint global_position = _progress_slider->mapToGlobal(_preview_position);
+    _preview_widget->move(global_position.x() - _preview_widget->width() / 2, global_position.y() - _preview_widget->height() - 8);
+    _preview_widget->show();
 }
 
 void MainWindow::on_playlist_row_changed(int current_row)
@@ -1038,8 +1094,67 @@ int MainWindow::get_video_screen_index_at(const QPoint &position) const
     return -1;
 }
 
+void MainWindow::show_progress_preview(const QPoint &position)
+{
+    if (_progress_slider == nullptr || !_progress_slider->isEnabled() || _duration_seconds <= 0)
+    {
+        hide_progress_preview();
+        return;
+    }
+
+    int slider_width = _progress_slider->width();
+    if (slider_width <= 0)
+    {
+        return;
+    }
+
+    int x = position.x();
+    if (x < 0)
+    {
+        x = 0;
+    }
+    if (x > slider_width)
+    {
+        x = slider_width;
+    }
+
+    _preview_position = position;
+    _preview_seconds = x * _duration_seconds / slider_width;
+    if (_preview_timer != nullptr)
+    {
+        _preview_timer->start();
+    }
+}
+
+void MainWindow::hide_progress_preview()
+{
+    if (_preview_timer != nullptr)
+    {
+        _preview_timer->stop();
+    }
+    if (_preview_widget != nullptr)
+    {
+        _preview_widget->hide();
+    }
+}
+
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == _progress_slider && event != nullptr)
+    {
+        if (event->type() == QEvent::MouseMove)
+        {
+            QMouseEvent *mouse_event = static_cast<QMouseEvent *>(event);
+            show_progress_preview(mouse_event->pos());
+            return false;
+        }
+        if (event->type() == QEvent::Leave)
+        {
+            hide_progress_preview();
+            return false;
+        }
+    }
+
     if (event != nullptr && (event->type() == QEvent::Enter || event->type() == QEvent::MouseMove))
     {
         for (int index = 0; index < _video_labels.size(); ++index)

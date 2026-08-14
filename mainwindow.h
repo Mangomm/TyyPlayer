@@ -21,6 +21,8 @@ class QSlider;
 class QTimer;
 class QWidget;
 class QEvent;
+class PreviewWidget;
+class VideoFrameExtractor;
 
 class MainWindow : public QMainWindow
 {
@@ -166,6 +168,8 @@ private slots:
     * @note: 当前用于模拟播放进度递增
     */
     void on_play_timer();
+
+    void update_progress_preview();
 
     /**
     * @brief 播放列表当前行变化回调
@@ -433,6 +437,10 @@ private:
 
     int get_video_screen_index_at(const QPoint &position) const;
 
+    void show_progress_preview(const QPoint &position);
+
+    void hide_progress_preview();
+
     /**
     * @brief 获取下一次播放使用的分屏索引
     * @author: tyy
@@ -598,6 +606,21 @@ private:
 
     // 倍速选择下拉框
     QComboBox *_speed_combo_box;
+
+    // Preview widget shown when hovering progress slider
+    PreviewWidget *_preview_widget;
+
+    // Video frame extractor for progress preview
+    VideoFrameExtractor *_preview_extractor;
+
+    // Progress preview delay timer
+    QTimer *_preview_timer;
+
+    // Last progress preview mouse position
+    QPoint _preview_position;
+
+    // Last progress preview timestamp
+    int _preview_seconds;
 
     // Decoder type used when opening new media
     int _decoder_type;

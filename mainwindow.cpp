@@ -1,13 +1,17 @@
-#include "mainwindow.h"
+﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
 
 #include <QAbstractItemView>
 #include <QAction>
 #include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFormLayout>
+#include <QFont>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -20,6 +24,7 @@
 #include <QSettings>
 #include <QSlider>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QStandardPaths>
 #include <QStyle>
 #include <QStringList>
@@ -36,10 +41,10 @@ static const char *SETTINGS_PLAYLIST_KEY = "playlist/files";
 static const char *SETTINGS_FILE_NAME = "playlist.ini";
 
 /**
-* @brief 获取播放列表配置文件路径
+* @brief Get playlist settings file path
 * @author: tyy
-* @param 无
-* @return 配置文件路径
+* @param none
+* @return playlist settings file path
 * @note:
 */
 static QString get_playlist_settings_file()
@@ -76,6 +81,7 @@ MainWindow::MainWindow(QWidget *parent)
       _add_button(nullptr),
       _remove_button(nullptr),
       _playlist_toggle_button(nullptr),
+      _settings_button(nullptr),
       _progress_slider(nullptr),
       _volume_slider(nullptr),
       _speed_combo_box(nullptr),
@@ -182,9 +188,35 @@ void MainWindow::init_ui()
     _speed_combo_box->setEnabled(false);
 
     _playlist_toggle_button = new QPushButton(_control_widget);
-    _playlist_toggle_button->setFixedSize(32, 28);
+    _playlist_toggle_button->setFlat(true);
+    _playlist_toggle_button->setFocusPolicy(Qt::NoFocus);
+    _playlist_toggle_button->setFixedSize(28, 28);
     _playlist_toggle_button->setCursor(Qt::PointingHandCursor);
     update_playlist_toggle_button();
+
+    _settings_button = new QPushButton(_control_widget);
+    _settings_button->setFlat(true);
+    _settings_button->setFocusPolicy(Qt::NoFocus);
+    _settings_button->setText(QString(QChar(0x2699)));
+    _settings_button->setStyleSheet(
+        "QPushButton {"
+        " background: transparent;"
+        " color: #303030;"
+        " border: none;"
+        " font-size: 18px;"
+        " padding: 0px;"
+        "}"
+        "QPushButton:hover {"
+        " background: #e9eef6;"
+        " color: #202020;"
+        " border-radius: 4px;"
+        "}"
+        "QPushButton:pressed {"
+        " background: #d9e4f5;"
+        "}");
+    _settings_button->setToolTip("Settings");
+    _settings_button->setFixedSize(28, 28);
+    _settings_button->setCursor(Qt::PointingHandCursor);
 
     button_layout->addWidget(backward_button);
     button_layout->addWidget(_play_button);
@@ -195,11 +227,12 @@ void MainWindow::init_ui()
     button_layout->addSpacing(12);
     button_layout->addWidget(_time_label);
     button_layout->addStretch();
-    button_layout->addWidget(_playlist_toggle_button);
+    button_layout->addWidget(_settings_button);
     button_layout->addWidget(speed_label);
     button_layout->addWidget(_speed_combo_box);
     button_layout->addWidget(volume_label);
     button_layout->addWidget(_volume_slider);
+    button_layout->addWidget(_playlist_toggle_button);
 
     control_layout->addWidget(_progress_slider);
     control_layout->addLayout(button_layout);
@@ -254,6 +287,7 @@ void MainWindow::init_connections()
     connect(_add_button, SIGNAL(clicked()), this, SLOT(add_media_files()));
     connect(_remove_button, SIGNAL(clicked()), this, SLOT(remove_selected_media()));
     connect(_playlist_toggle_button, SIGNAL(clicked()), this, SLOT(toggle_playlist_panel()));
+    connect(_settings_button, SIGNAL(clicked()), this, SLOT(show_settings_menu()));
     connect(_play_button, SIGNAL(clicked()), this, SLOT(toggle_play()));
     connect(_pause_button, SIGNAL(clicked()), this, SLOT(toggle_pause()));
     connect(_step_button, SIGNAL(clicked()), this, SLOT(step_forward()));
@@ -295,10 +329,9 @@ void MainWindow::init_video_grid(QWidget *parent)
         _screen_positions.push_back(0);
         _screen_speeds.push_back(1.0f);
         update_video_label_style(index);
-
         QPushButton *full_screen_button = new QPushButton(_video_widget);
-        full_screen_button->setText("⛶");
-        full_screen_button->setToolTip("全屏显示该路视频");
+        full_screen_button->setText(QString(QChar(0x26F6)));
+        full_screen_button->setToolTip("Full screen");
         full_screen_button->setFixedSize(34, 30);
         full_screen_button->setCursor(Qt::PointingHandCursor);
         full_screen_button->setMouseTracking(true);
@@ -658,6 +691,10 @@ void MainWindow::show_split_menu(const QPoint &position)
     full_screen_action->setChecked(isFullScreen());
     connect(full_screen_action, SIGNAL(triggered()), this, SLOT(toggle_full_screen()));
 
+    menu.addSeparator();
+    QAction *settings_action = menu.addAction("Settings");
+    connect(settings_action, SIGNAL(triggered()), this, SLOT(show_settings_menu()));
+
     menu.exec(_video_widget->mapToGlobal(position));
 }
 
@@ -733,6 +770,146 @@ void MainWindow::toggle_playlist_panel()
     }
 }
 
+void MainWindow::show_settings_menu()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle("Settings");
+    dialog.resize(720, 420);
+
+    QHBoxLayout *main_layout = new QHBoxLayout(&dialog);
+    main_layout->setContentsMargins(0, 0, 0, 0);
+    main_layout->setSpacing(0);
+
+    QPushButton *video_options_button = new QPushButton("Video Options", &dialog);
+    QPushButton *help_button = new QPushButton("Help", &dialog);
+    video_options_button->setMinimumHeight(72);
+    help_button->setMinimumHeight(72);
+    video_options_button->setCursor(Qt::PointingHandCursor);
+    help_button->setCursor(Qt::PointingHandCursor);
+
+    QWidget *left_widget = new QWidget(&dialog);
+    left_widget->setFixedWidth(180);
+    left_widget->setStyleSheet("QWidget { background: #f5f5f5; border-right: 1px solid #cfcfcf; }");
+    QVBoxLayout *left_layout = new QVBoxLayout(left_widget);
+    left_layout->setContentsMargins(0, 0, 0, 0);
+    left_layout->setSpacing(0);
+    left_layout->addWidget(video_options_button);
+    left_layout->addWidget(help_button);
+    left_layout->addStretch();
+
+    QString option_button_style =
+        "QPushButton {"
+        " background: #ffffff;"
+        " color: #202020;"
+        " border: none;"
+        " border-bottom: 1px solid #d8d8d8;"
+        " padding-left: 18px;"
+        " text-align: left;"
+        " font-size: 14px;"
+        "}"
+        "QPushButton:hover {"
+        " background: #eef4ff;"
+        "}"
+        "QPushButton:pressed {"
+        " background: #dbe9ff;"
+        "}";
+    video_options_button->setStyleSheet(option_button_style);
+    video_options_button->setStyleSheet(
+        option_button_style +
+        "QPushButton {"
+        " border-top: 1px solid #d8d8d8;"
+        "}");
+    help_button->setStyleSheet(option_button_style);
+
+    QStackedWidget *content_widget = new QStackedWidget(&dialog);
+    content_widget->setStyleSheet("QStackedWidget { background: #ffffff; }");
+
+    QWidget *video_page = new QWidget(content_widget);
+    QVBoxLayout *video_layout = new QVBoxLayout(video_page);
+    video_layout->setContentsMargins(28, 24, 28, 24);
+    QLabel *video_title = new QLabel("Video Options", video_page);
+    QFont title_font = video_title->font();
+    title_font.setPointSize(14);
+    title_font.setBold(true);
+    video_title->setFont(title_font);
+    QFormLayout *decoder_layout = new QFormLayout();
+    QComboBox *decoder_combo_box = new QComboBox(video_page);
+    decoder_combo_box->addItem("Auto");
+    decoder_combo_box->addItem("Software");
+    decoder_combo_box->addItem("D3D11VA");
+    decoder_layout->addRow("Decoder", decoder_combo_box);
+    video_layout->addWidget(video_title);
+    video_layout->addSpacing(16);
+    video_layout->addLayout(decoder_layout);
+    video_layout->addStretch();
+
+    QWidget *help_page = new QWidget(content_widget);
+    QVBoxLayout *help_layout = new QVBoxLayout(help_page);
+    help_layout->setContentsMargins(28, 24, 28, 24);
+    QLabel *help_title = new QLabel("Help", help_page);
+    help_title->setFont(title_font);
+    QLabel *help_info = new QLabel(
+        "TyyPlayer\n\n"
+        "Version: 0.1.0\n"
+        "Description: Qt + FFmpeg + SDL Player\n"
+        "Author: tyy",
+        help_page);
+    help_info->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    help_layout->addWidget(help_title);
+    help_layout->addSpacing(16);
+    help_layout->addWidget(help_info);
+    help_layout->addStretch();
+
+    content_widget->addWidget(video_page);
+    content_widget->addWidget(help_page);
+
+    connect(video_options_button, &QPushButton::clicked, content_widget, [content_widget]() {
+        content_widget->setCurrentIndex(0);
+    });
+    connect(help_button, &QPushButton::clicked, content_widget, [content_widget]() {
+        content_widget->setCurrentIndex(1);
+    });
+
+    main_layout->addWidget(left_widget);
+    main_layout->addWidget(content_widget, 1);
+
+    dialog.exec();
+}
+
+void MainWindow::show_help_info()
+{
+    QMessageBox::information(
+        this,
+        "Help",
+        "TyyPlayer\n\n"
+        "Version: 0.1.0\n"
+        "Description: Qt + FFmpeg + SDL Player\n"
+        "Author: tyy");
+}
+
+void MainWindow::show_video_options()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle("Video Options");
+
+    QVBoxLayout *main_layout = new QVBoxLayout(&dialog);
+    QFormLayout *form_layout = new QFormLayout();
+    QComboBox *decoder_combo_box = new QComboBox(&dialog);
+    decoder_combo_box->addItem("Auto");
+    decoder_combo_box->addItem("Software");
+    decoder_combo_box->addItem("D3D11VA");
+
+    form_layout->addRow("Decoder", decoder_combo_box);
+    main_layout->addLayout(form_layout);
+
+    QDialogButtonBox *button_box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(button_box, SIGNAL(accepted()), &dialog, SLOT(accept()));
+    connect(button_box, SIGNAL(rejected()), &dialog, SLOT(reject()));
+    main_layout->addWidget(button_box);
+
+    dialog.exec();
+}
+
 void MainWindow::hide_video_overlay()
 {
     for (int index = 0; index < _video_full_screen_buttons.size(); ++index)
@@ -777,25 +954,23 @@ void MainWindow::update_playlist_toggle_button()
         return;
     }
 
-    _playlist_toggle_button->setText("☰");
-    _playlist_toggle_button->setToolTip(_playlist_visible ? "隐藏播放列表" : "打开播放列表");
+    _playlist_toggle_button->setText(QString(QChar(0x2630)));
+    _playlist_toggle_button->setToolTip(_playlist_visible ? "Hide playlist" : "Show playlist");
     _playlist_toggle_button->setStyleSheet(
         "QPushButton {"
-        " background: #202020;"
-        " color: #e6e6e6;"
-        " border: 1px solid #3a3a3a;"
-        " border-radius: 4px;"
+        " background: transparent;"
+        " color: #303030;"
+        " border: none;"
         " font-size: 18px;"
-        " font-weight: bold;"
-        " padding-bottom: 2px;"
+        " padding: 0px;"
         "}"
         "QPushButton:hover {"
-        " background: #2f80ff;"
-        " color: #ffffff;"
-        " border: 1px solid #5a9cff;"
+        " background: #e9eef6;"
+        " color: #202020;"
+        " border-radius: 4px;"
         "}"
         "QPushButton:pressed {"
-        " background: #1f5fbf;"
+        " background: #d9e4f5;"
         "}");
 }
 
@@ -1204,10 +1379,9 @@ void MainWindow::show_video_overlay(int screen_index)
             _video_full_screen_buttons[index]->hide();
         }
     }
-
     _overlay_screen_index = screen_index;
     update_video_overlay_geometry(screen_index);
-    button->setToolTip(_fullscreen_screen_index == screen_index ? "退出该路全屏" : "全屏显示该路视频");
+    button->setToolTip(_fullscreen_screen_index == screen_index ? "Exit full screen" : "Full screen");
     button->show();
     button->raise();
 

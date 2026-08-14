@@ -220,6 +220,33 @@ private slots:
     void toggle_playlist_panel();
 
     /**
+    * @brief 显示设置菜单
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void show_settings_menu();
+
+    /**
+    * @brief 显示程序帮助信息
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void show_help_info();
+
+    /**
+    * @brief 显示视频选项
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note: 当前只显示界面选项，暂不接入底层解码器逻辑
+    */
+    void show_video_options();
+
+    /**
     * @brief 隐藏视频悬浮全屏按钮
     * @author: tyy
     * @param 无
@@ -550,6 +577,9 @@ private:
 
     // 显示或隐藏播放列表按钮
     QPushButton *_playlist_toggle_button;
+
+    // 设置按钮
+    QPushButton *_settings_button;
 
     // 播放进度条
     QSlider *_progress_slider;

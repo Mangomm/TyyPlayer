@@ -129,6 +129,10 @@ void MediaInfoDialog::set_statistics(const TyyPlayerStatistics &statistics)
         _statistics_items.append(new QTreeWidgetItem(_statistics_item, QStringList() << "Frame Drops" << QString()));
         _statistics_items.append(new QTreeWidgetItem(_statistics_item, QStringList() << "Faulty DTS" << QString()));
         _statistics_items.append(new QTreeWidgetItem(_statistics_item, QStringList() << "Faulty PTS" << QString()));
+        _statistics_items.append(new QTreeWidgetItem(_statistics_item, QStringList() << "Video Decoder" << QString()));
+        _statistics_items.append(new QTreeWidgetItem(_statistics_item, QStringList() << "Video Decoder Detail" << QString()));
+        _statistics_items.append(new QTreeWidgetItem(_statistics_item, QStringList() << "Audio Decoder" << QString()));
+        _statistics_items.append(new QTreeWidgetItem(_statistics_item, QStringList() << "Audio Decoder Detail" << QString()));
     }
 
     set_item_value(_statistics_items.value(0), statistics.display_fps > 0.0 ? QString::number(statistics.display_fps, 'f', 2) + " fps" : "N/A");
@@ -141,6 +145,10 @@ void MediaInfoDialog::set_statistics(const TyyPlayerStatistics &statistics)
     set_item_value(_statistics_items.value(7), QString::number(statistics.frame_drops));
     set_item_value(_statistics_items.value(8), QString::number(statistics.faulty_dts));
     set_item_value(_statistics_items.value(9), QString::number(statistics.faulty_pts));
+    set_item_value(_statistics_items.value(10), QString::fromLocal8Bit(statistics.video_decoder));
+    set_item_value(_statistics_items.value(11), QString::fromLocal8Bit(statistics.video_decoder_detail));
+    set_item_value(_statistics_items.value(12), QString::fromLocal8Bit(statistics.audio_decoder));
+    set_item_value(_statistics_items.value(13), QString::fromLocal8Bit(statistics.audio_decoder_detail));
 
     _tree_widget->expandAll();
     _tree_widget->resizeColumnToContents(0);

@@ -95,6 +95,8 @@ public:
     */
     void d3d11va_retrieve_data(AVCodecContext* avctx, AVFrame* frame);
 
+    const char *get_device_detail() const;
+
 private:
     /**
     * @brief 重置D3D11VA成员变量
@@ -131,6 +133,9 @@ private:
     ID3D11VideoProcessorEnumerator* _d3d11_video_processor_enumerator;
     // D3D11视频处理器
     ID3D11VideoProcessor* _d3d11_video_processor;
+
+    // D3D11 device detail
+    char _device_detail[256];
 
 public:
     // 渲染窗口句柄

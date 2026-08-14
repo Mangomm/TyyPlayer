@@ -1,5 +1,7 @@
 #include <d3d11.h>
 #include "tyy_ffmpeg_d3d11va.h"
+#include <stdio.h>
+#include <stdlib.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -39,6 +41,7 @@ void TD3D11VA_Decoder::d3d11_zero() {
 	_swap_chain2 = NULL;
 	_d3d11_video_processor_enumerator = NULL;
 	_d3d11_video_processor = NULL;
+	memset(_device_detail, 0, sizeof(_device_detail));
 }
 
 int TD3D11VA_Decoder::d3d11_init(AVCodecContext* ctx, const enum AVHWDeviceType type) {
@@ -94,6 +97,16 @@ HRESULT TD3D11VA_Decoder::d3d11_init_private(HWND hWnd) {
 	hr = pDXGIdevice->GetParent(__uuidof(IDXGIAdapter), (void**)&pDXGIAdapter);
 	if (FAILED(hr)) 
 		goto done;
+
+	DXGI_ADAPTER_DESC adapter_desc;
+	if (SUCCEEDED(pDXGIAdapter->GetDesc(&adapter_desc))) {
+		char adapter_name[128] = { 0 };
+		wcstombs(adapter_name, adapter_desc.Description, sizeof(adapter_name) - 1);
+		snprintf(_device_detail, sizeof(_device_detail),
+			"D3D11 Video Acceleration (%s vendor %u)",
+			adapter_name,
+			adapter_desc.VendorId);
+	}
 
 	hr = pDXGIAdapter->GetParent(__uuidof(IDXGIFactory2), (void**)&pIDXGIFactory3);
 	if (FAILED(hr)) 
@@ -169,6 +182,11 @@ done:
 	SAFE_RELEASE(pDXGIdevice);
 
 	return hr;
+}
+
+const char *TD3D11VA_Decoder::get_device_detail() const
+{
+	return _device_detail;
 }
 
 void TD3D11VA_Decoder::d3d11_uninit()

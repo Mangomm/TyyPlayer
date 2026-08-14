@@ -69,6 +69,10 @@ typedef struct TyyPlayerStatistics
     int height;
     int sample_rate;
     int channels;
+    char video_decoder[128];
+    char video_decoder_detail[256];
+    char audio_decoder[128];
+    char audio_decoder_detail[256];
 } TyyPlayerStatistics;
 
 typedef void (*TyyPlayerEventCallback)(void *user_data, int event_code, int error_code);

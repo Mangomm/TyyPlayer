@@ -3708,6 +3708,23 @@ bool TyyVideoState::get_statistics(TyyPlayerStatistics *statistics)
 		{
 			statistics->faulty_dts = _viddec._avctx->pts_correction_num_faulty_dts;
 			statistics->faulty_pts = _viddec._avctx->pts_correction_num_faulty_pts;
+			if (_hwaccel == AC_HARDWAREACCELERATETYPE_D3D11VA)
+			{
+				snprintf(statistics->video_decoder, sizeof(statistics->video_decoder), "%s", "D3D11VA");
+				if (_d3d11va_decoder != NULL && _d3d11va_decoder->get_device_detail()[0] != '\0')
+				{
+					snprintf(statistics->video_decoder_detail, sizeof(statistics->video_decoder_detail), "%s", _d3d11va_decoder->get_device_detail());
+				}
+				else
+				{
+					snprintf(statistics->video_decoder_detail, sizeof(statistics->video_decoder_detail), "%s", "D3D11 Video Acceleration");
+				}
+			}
+			else if (_viddec._avctx->codec != NULL)
+			{
+				snprintf(statistics->video_decoder, sizeof(statistics->video_decoder), "%s", _viddec._avctx->codec->name);
+				snprintf(statistics->video_decoder_detail, sizeof(statistics->video_decoder_detail), "%s", _viddec._avctx->codec->long_name != NULL ? _viddec._avctx->codec->long_name : _viddec._avctx->codec->name);
+			}
 		}
 	}
 
@@ -3717,6 +3734,11 @@ bool TyyVideoState::get_statistics(TyyPlayerStatistics *statistics)
 		statistics->audio_bit_rate = codecpar->bit_rate;
 		statistics->sample_rate = codecpar->sample_rate;
 		statistics->channels = codecpar->channels;
+		if (_auddec._avctx != NULL && _auddec._avctx->codec != NULL)
+		{
+			snprintf(statistics->audio_decoder, sizeof(statistics->audio_decoder), "%s", _auddec._avctx->codec->name);
+			snprintf(statistics->audio_decoder_detail, sizeof(statistics->audio_decoder_detail), "%s", _auddec._avctx->codec->long_name != NULL ? _auddec._avctx->codec->long_name : _auddec._avctx->codec->name);
+		}
 	}
 
 	return true;

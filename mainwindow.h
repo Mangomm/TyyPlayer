@@ -156,6 +156,8 @@ private slots:
     */
     void set_speed_value(int index);
 
+    void set_decoder_type_value(int index);
+
     /**
     * @brief 播放定时器回调
     * @author: tyy
@@ -589,6 +591,9 @@ private:
 
     // 倍速选择下拉框
     QComboBox *_speed_combo_box;
+
+    // Decoder type used when opening new media
+    int _decoder_type;
 
     // 模拟播放进度的定时器
     QTimer *_play_timer;

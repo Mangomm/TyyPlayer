@@ -41,6 +41,13 @@ typedef enum TYY_PLAYER_EVENT
     TYY_PLAYER_EVENT_DISCONNECT = 2000
 } TYY_PLAYER_EVENT;
 
+typedef enum TYY_PLAYER_DECODER_TYPE
+{
+    TYY_PLAYER_DECODER_TYPE_SOFTWARE = 0,
+    TYY_PLAYER_DECODER_TYPE_AUTO = 1,
+    TYY_PLAYER_DECODER_TYPE_D3D11VA = 2
+} TYY_PLAYER_DECODER_TYPE;
+
 typedef void (*TyyPlayerEventCallback)(void *user_data, int event_code, int error_code);
 
 /**
@@ -84,6 +91,16 @@ TYY_PLAYER_API int tyy_player_set_event_callback(
         TyyPlayerHandle handle,
         TyyPlayerEventCallback callback,
         void *user_data);
+
+/**
+* @brief 设置播放器解码器类型
+* @author: tyy
+* @param[in] handle 播放器句柄
+* @param[in] decoder_type 解码器类型，参考TYY_PLAYER_DECODER_TYPE
+* @return 错误码
+* @note: 该设置只对后续打开的视频生效，已经播放的视频需要关闭后重新打开
+*/
+TYY_PLAYER_API int tyy_player_set_decoder_type(TyyPlayerHandle handle, int decoder_type);
 
 /**
 * @brief 打开媒体资源

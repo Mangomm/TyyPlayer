@@ -33,6 +33,16 @@ int tyy_player_set_event_callback(TyyPlayerHandle handle, TyyPlayerEventCallback
     return player->set_event_callback(callback, user_data);
 }
 
+int tyy_player_set_decoder_type(TyyPlayerHandle handle, int decoder_type)
+{
+    TyyPlayerCore *player = static_cast<TyyPlayerCore *>(handle);
+    if (player == nullptr)
+    {
+        return TYY_PLAYER_ERROR_INVALID_PARAM;
+    }
+    return player->set_decoder_type(decoder_type);
+}
+
 int tyy_player_open(TyyPlayerHandle handle, const char *url)
 {
     TyyPlayerCore *player = static_cast<TyyPlayerCore *>(handle);

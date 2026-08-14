@@ -85,6 +85,7 @@ MainWindow::MainWindow(QWidget *parent)
       _progress_slider(nullptr),
       _volume_slider(nullptr),
       _speed_combo_box(nullptr),
+      _decoder_type(TYY_PLAYER_DECODER_TYPE_SOFTWARE),
       _play_timer(nullptr),
       _overlay_hide_timer(nullptr),
       _duration_seconds(300),
@@ -630,6 +631,17 @@ void MainWindow::set_speed_value(int index)
     }
 }
 
+void MainWindow::set_decoder_type_value(int index)
+{
+    QComboBox *decoder_combo_box = qobject_cast<QComboBox *>(sender());
+    if (decoder_combo_box == nullptr || index < 0)
+    {
+        return;
+    }
+
+    _decoder_type = decoder_combo_box->itemData(index).toInt();
+}
+
 void MainWindow::on_play_timer()
 {
     int screen_index = -1;
@@ -834,9 +846,15 @@ void MainWindow::show_settings_menu()
     video_title->setFont(title_font);
     QFormLayout *decoder_layout = new QFormLayout();
     QComboBox *decoder_combo_box = new QComboBox(video_page);
-    decoder_combo_box->addItem("Auto");
-    decoder_combo_box->addItem("Software");
-    decoder_combo_box->addItem("D3D11VA");
+    decoder_combo_box->addItem("Software", TYY_PLAYER_DECODER_TYPE_SOFTWARE);
+    decoder_combo_box->addItem("D3D11VA", TYY_PLAYER_DECODER_TYPE_D3D11VA);
+    decoder_combo_box->addItem("Auto", TYY_PLAYER_DECODER_TYPE_AUTO);
+    int decoder_index = decoder_combo_box->findData(_decoder_type);
+    if (decoder_index >= 0)
+    {
+        decoder_combo_box->setCurrentIndex(decoder_index);
+    }
+    connect(decoder_combo_box, SIGNAL(currentIndexChanged(int)), this, SLOT(set_decoder_type_value(int)));
     decoder_layout->addRow("Decoder", decoder_combo_box);
     video_layout->addWidget(video_title);
     video_layout->addSpacing(16);
@@ -1637,6 +1655,13 @@ int MainWindow::start_current_media(int screen_index)
     unsigned long long win_id = static_cast<unsigned long long>(video_label->winId());
     TYYINFO("qt video label index: {}, win_id: {}", screen_index, win_id);
     int ret = tyy_player_set_window(player_handle, win_id);
+    if (ret != TYY_PLAYER_ERROR_OK)
+    {
+        tyy_player_destroy(player_handle);
+        return ret;
+    }
+
+    ret = tyy_player_set_decoder_type(player_handle, _decoder_type);
     if (ret != TYY_PLAYER_ERROR_OK)
     {
         tyy_player_destroy(player_handle);

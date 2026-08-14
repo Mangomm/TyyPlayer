@@ -6,6 +6,7 @@
 
 static const char *TYY_PLAYER_PROPERTY_URL = "url";
 static const char *TYY_PLAYER_PROPERTY_WIN_ID = "win_id";
+static const char *TYY_PLAYER_PROPERTY_HWACCEL_TYPE = "hwaccel_type";
 
 TyyPlayerCore::TyyPlayerCore()
     : _video_state(new TyyPlayer::TyyVideoState()),
@@ -40,6 +41,19 @@ int TyyPlayerCore::set_event_callback(TyyPlayerEventCallback callback, void *use
     _event_callback = callback;
     _event_user_data = user_data;
     _video_state->set_event_callback(callback, user_data);
+    return TYY_PLAYER_ERROR_OK;
+}
+
+int TyyPlayerCore::set_decoder_type(int decoder_type)
+{
+    if (decoder_type != TYY_PLAYER_DECODER_TYPE_SOFTWARE &&
+        decoder_type != TYY_PLAYER_DECODER_TYPE_AUTO &&
+        decoder_type != TYY_PLAYER_DECODER_TYPE_D3D11VA)
+    {
+        return TYY_PLAYER_ERROR_INVALID_PARAM;
+    }
+
+    _properties.set_property(TYY_PLAYER_PROPERTY_HWACCEL_TYPE, decoder_type);
     return TYY_PLAYER_ERROR_OK;
 }
 

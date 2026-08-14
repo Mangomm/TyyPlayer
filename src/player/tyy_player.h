@@ -48,6 +48,8 @@ public:
     */
     int set_event_callback(TyyPlayerEventCallback callback, void *user_data);
 
+    int set_decoder_type(int decoder_type);
+
     /**
     * @brief 打开媒体资源
     * @author: tyy

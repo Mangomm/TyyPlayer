@@ -2625,6 +2625,9 @@ void TyyVideoState::video_state_memset_zero() {
 	_autorotate = 1;
 
 	_player_state = 0;
+	_statistics_last_time = 0;
+	_statistics_frame_count = 0;
+	_statistics_display_fps = 0.0;
 
 	_last_read_packet_time = av_gettime();
 	_timeout = 5;
@@ -3266,6 +3269,19 @@ void video_refresh(void *opaque, double *remaining_time)
 
 		if (!is->_display_disable && is->_force_refresh && is->_show_mode == TyyVideoState::SHOW_MODE_VIDEO && is->_pictq._rindex_shown) {
 			is->video_display();
+			int64_t cur_time = av_gettime_relative();
+			if (is->_statistics_last_time <= 0)
+			{
+				is->_statistics_last_time = cur_time;
+				is->_statistics_frame_count = 0;
+			}
+			++is->_statistics_frame_count;
+			if (cur_time - is->_statistics_last_time >= 1000000)
+			{
+				is->_statistics_display_fps = is->_statistics_frame_count * 1000000.0 / (cur_time - is->_statistics_last_time);
+				is->_statistics_frame_count = 0;
+				is->_statistics_last_time = cur_time;
+			}
 		}
 
 	}
@@ -3643,6 +3659,67 @@ int TyyVideoState::get_fps() {
 
 double TyyVideoState::get_fps_safe() {
 	return _frame_rate;
+}
+
+bool TyyVideoState::get_statistics(TyyPlayerStatistics *statistics)
+{
+	if (statistics == NULL)
+	{
+		return false;
+	}
+
+	memset(statistics, 0, sizeof(TyyPlayerStatistics));
+	if (_ic == NULL)
+	{
+		return false;
+	}
+
+	statistics->valid = 1;
+	statistics->display_fps = _statistics_display_fps;
+	statistics->stream_fps = _frame_rate;
+	statistics->master_clock = get_master_clock();
+	statistics->duration = _ic->duration;
+	statistics->bit_rate = _ic->bit_rate;
+	statistics->audio_queue_size = _audioq._size / 1024;
+	statistics->video_queue_size = _videoq._size / 1024;
+	statistics->subtitle_queue_size = _subtitleq._size;
+	statistics->frame_drops = _frame_drops_early + _frame_drops_late;
+
+	if (_audio_st != NULL && _video_st != NULL)
+	{
+		statistics->av_diff = _audclk.get_clock() - _vidclk.get_clock();
+	}
+	else if (_video_st != NULL)
+	{
+		statistics->av_diff = get_master_clock() - _vidclk.get_clock();
+	}
+	else if (_audio_st != NULL)
+	{
+		statistics->av_diff = get_master_clock() - _audclk.get_clock();
+	}
+
+	if (_video_st != NULL && _video_st->codecpar != NULL)
+	{
+		AVCodecParameters *codecpar = _video_st->codecpar;
+		statistics->width = codecpar->width;
+		statistics->height = codecpar->height;
+		statistics->video_bit_rate = codecpar->bit_rate;
+		if (_viddec._avctx != NULL)
+		{
+			statistics->faulty_dts = _viddec._avctx->pts_correction_num_faulty_dts;
+			statistics->faulty_pts = _viddec._avctx->pts_correction_num_faulty_pts;
+		}
+	}
+
+	if (_audio_st != NULL && _audio_st->codecpar != NULL)
+	{
+		AVCodecParameters *codecpar = _audio_st->codecpar;
+		statistics->audio_bit_rate = codecpar->bit_rate;
+		statistics->sample_rate = codecpar->sample_rate;
+		statistics->channels = codecpar->channels;
+	}
+
+	return true;
 }
 
 bool TyyVideoState::has_video_track() {

@@ -1,5 +1,6 @@
 ﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "media_info_dialog.h"
 
 #include <QAbstractItemView>
 #include <QAction>
@@ -329,6 +330,7 @@ void MainWindow::init_video_grid(QWidget *parent)
         _screen_volumes.push_back(80);
         _screen_positions.push_back(0);
         _screen_speeds.push_back(1.0f);
+        _screen_file_names.push_back(QString());
         update_video_label_style(index);
         QPushButton *full_screen_button = new QPushButton(_video_widget);
         full_screen_button->setText(QString(QChar(0x26F6)));
@@ -679,6 +681,7 @@ void MainWindow::play_playlist_item(QListWidgetItem *item)
 
 void MainWindow::show_split_menu(const QPoint &position)
 {
+    int screen_index = get_video_screen_index_at(position);
     QMenu menu(this);
     QMenu *split_menu = menu.addMenu("Split Screen");
 
@@ -707,6 +710,11 @@ void MainWindow::show_split_menu(const QPoint &position)
     QAction *settings_action = menu.addAction("Settings");
     connect(settings_action, SIGNAL(triggered()), this, SLOT(show_settings_menu()));
 
+    QAction *media_info_action = menu.addAction("Media Info");
+    media_info_action->setData(screen_index);
+    media_info_action->setEnabled(screen_index >= 0);
+    connect(media_info_action, SIGNAL(triggered()), this, SLOT(show_media_info()));
+
     menu.exec(_video_widget->mapToGlobal(position));
 }
 
@@ -719,6 +727,30 @@ void MainWindow::set_split_screen_count()
     }
 
     update_split_screen(action->data().toInt());
+}
+
+void MainWindow::show_media_info()
+{
+    QAction *action = qobject_cast<QAction *>(sender());
+    int screen_index = action != nullptr ? action->data().toInt() : -1;
+    if (screen_index < 0 || screen_index >= _screen_file_names.size() ||
+        _screen_file_names[screen_index].isEmpty())
+    {
+        QMessageBox::information(this, "Media Info", "No media is playing on this screen.");
+        return;
+    }
+
+    MediaInfoDialog dialog(this);
+    if (!dialog.set_media_file(_screen_file_names[screen_index]))
+    {
+        QMessageBox::warning(this, "Media Info", "Read media information failed.");
+        return;
+    }
+    if (screen_index < _player_handles.size() && _player_handles[screen_index] != nullptr)
+    {
+        dialog.set_player_handle(_player_handles[screen_index]);
+    }
+    dialog.exec();
 }
 
 void MainWindow::toggle_full_screen()
@@ -990,6 +1022,20 @@ void MainWindow::update_playlist_toggle_button()
         "QPushButton:pressed {"
         " background: #d9e4f5;"
         "}");
+}
+
+int MainWindow::get_video_screen_index_at(const QPoint &position) const
+{
+    for (int index = 0; index < _video_labels.size() && index < _split_screen_count; ++index)
+    {
+        QLabel *video_label = _video_labels[index];
+        if (video_label != nullptr && video_label->isVisible() && video_label->geometry().contains(position))
+        {
+            return index;
+        }
+    }
+
+    return -1;
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
@@ -1668,7 +1714,8 @@ int MainWindow::start_current_media(int screen_index)
         return ret;
     }
 
-    QByteArray file_name = item->data(Qt::UserRole).toString().toLocal8Bit();
+    QString selected_file_name = item->data(Qt::UserRole).toString();
+    QByteArray file_name = selected_file_name.toLocal8Bit();
     ret = tyy_player_open(player_handle, file_name.constData());
     if (ret != TYY_PLAYER_ERROR_OK)
     {
@@ -1695,6 +1742,10 @@ int MainWindow::start_current_media(int screen_index)
     _player_handles[screen_index] = player_handle;
     _screen_playing[screen_index] = true;
     _screen_paused[screen_index] = false;
+    if (screen_index < _screen_file_names.size())
+    {
+        _screen_file_names[screen_index] = selected_file_name;
+    }
     if (screen_index < _screen_positions.size())
     {
         _screen_positions[screen_index] = 0;
@@ -1743,6 +1794,10 @@ void MainWindow::release_screen_player(int screen_index)
     if (screen_index < _screen_positions.size())
     {
         _screen_positions[screen_index] = 0;
+    }
+    if (screen_index < _screen_file_names.size())
+    {
+        _screen_file_names[screen_index].clear();
     }
     if (_overlay_screen_index == screen_index)
     {

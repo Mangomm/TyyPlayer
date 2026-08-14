@@ -203,6 +203,8 @@ private slots:
     */
     void set_split_screen_count();
 
+    void show_media_info();
+
     /**
     * @brief Toggle main window full screen state
     * @author: tyy
@@ -429,6 +431,8 @@ private:
     */
     void update_playlist_toggle_button();
 
+    int get_video_screen_index_at(const QPoint &position) const;
+
     /**
     * @brief 获取下一次播放使用的分屏索引
     * @author: tyy
@@ -549,6 +553,9 @@ private:
 
     // 每个分屏当前播放倍速
     QVector<float> _screen_speeds;
+
+    // Media file path for each video screen
+    QVector<QString> _screen_file_names;
 
     // 每个分屏对应的悬浮全屏按钮
     QVector<QPushButton *> _video_full_screen_buttons;

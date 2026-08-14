@@ -50,6 +50,8 @@ public:
 
     int set_decoder_type(int decoder_type);
 
+    int get_statistics(TyyPlayerStatistics *statistics);
+
     /**
     * @brief 打开媒体资源
     * @author: tyy

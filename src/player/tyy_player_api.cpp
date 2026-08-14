@@ -43,6 +43,16 @@ int tyy_player_set_decoder_type(TyyPlayerHandle handle, int decoder_type)
     return player->set_decoder_type(decoder_type);
 }
 
+int tyy_player_get_statistics(TyyPlayerHandle handle, TyyPlayerStatistics *statistics)
+{
+    TyyPlayerCore *player = static_cast<TyyPlayerCore *>(handle);
+    if (player == nullptr)
+    {
+        return TYY_PLAYER_ERROR_INVALID_PARAM;
+    }
+    return player->get_statistics(statistics);
+}
+
 int tyy_player_open(TyyPlayerHandle handle, const char *url)
 {
     TyyPlayerCore *player = static_cast<TyyPlayerCore *>(handle);

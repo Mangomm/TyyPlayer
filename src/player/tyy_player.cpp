@@ -57,6 +57,20 @@ int TyyPlayerCore::set_decoder_type(int decoder_type)
     return TYY_PLAYER_ERROR_OK;
 }
 
+int TyyPlayerCore::get_statistics(TyyPlayerStatistics *statistics)
+{
+    if (statistics == nullptr || _video_state == nullptr)
+    {
+        return TYY_PLAYER_ERROR_INVALID_PARAM;
+    }
+    if (!_is_started)
+    {
+        return TYY_PLAYER_ERROR_STATE_FAILED;
+    }
+
+    return _video_state->get_statistics(statistics) ? TYY_PLAYER_ERROR_OK : TYY_PLAYER_ERROR_STATE_FAILED;
+}
+
 int TyyPlayerCore::open(const char *url)
 {
     if (url == nullptr || url[0] == '\0')

@@ -48,6 +48,29 @@ typedef enum TYY_PLAYER_DECODER_TYPE
     TYY_PLAYER_DECODER_TYPE_D3D11VA = 2
 } TYY_PLAYER_DECODER_TYPE;
 
+typedef struct TyyPlayerStatistics
+{
+    int valid;
+    double display_fps;
+    double stream_fps;
+    double master_clock;
+    double av_diff;
+    int audio_queue_size;
+    int video_queue_size;
+    int subtitle_queue_size;
+    int frame_drops;
+    long long faulty_dts;
+    long long faulty_pts;
+    long long duration;
+    long long bit_rate;
+    long long video_bit_rate;
+    long long audio_bit_rate;
+    int width;
+    int height;
+    int sample_rate;
+    int channels;
+} TyyPlayerStatistics;
+
 typedef void (*TyyPlayerEventCallback)(void *user_data, int event_code, int error_code);
 
 /**
@@ -101,6 +124,16 @@ TYY_PLAYER_API int tyy_player_set_event_callback(
 * @note: 该设置只对后续打开的视频生效，已经播放的视频需要关闭后重新打开
 */
 TYY_PLAYER_API int tyy_player_set_decoder_type(TyyPlayerHandle handle, int decoder_type);
+
+/**
+* @brief 获取播放器统计信息
+* @author: tyy
+* @param[in] handle 播放器句柄
+* @param[out] statistics 统计信息
+* @return 错误码
+* @note: 优先返回播放中底层实时统计信息
+*/
+TYY_PLAYER_API int tyy_player_get_statistics(TyyPlayerHandle handle, TyyPlayerStatistics *statistics);
 
 /**
 * @brief 打开媒体资源

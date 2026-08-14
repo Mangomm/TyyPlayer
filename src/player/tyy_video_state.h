@@ -174,6 +174,8 @@ enum {
 
 		double get_fps_safe();
 
+		bool get_statistics(TyyPlayerStatistics *statistics);
+
 		bool has_video_track();
 
 		bool has_audio_track();
@@ -525,6 +527,9 @@ enum {
 		void *_event_user_data = NULL;
 
 		int _player_state = 0;
+		int64_t _statistics_last_time = 0;
+		int _statistics_frame_count = 0;
+		double _statistics_display_fps = 0.0;
 		int64_t _last_read_packet_time = av_gettime();
 		int _timeout = 5;
 		MediaEndActionFlag _end_flag = MediaEndAction_KeepDisplay;

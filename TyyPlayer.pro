@@ -27,7 +27,8 @@ SOURCES += \
     src/player/tyy_player_api.cpp \
     src/player/tyy_properties.cpp \
     src/player/tyy_sonic.cpp \
-    src/player/tyy_video_state.cpp
+    src/player/tyy_video_state.cpp \
+    ui/media_info_dialog.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -39,12 +40,14 @@ HEADERS += \
     src/player/tyy_player_api.h \
     src/player/tyy_properties.h \
     src/player/tyy_sonic.h \
-    src/player/tyy_video_state.h
+    src/player/tyy_video_state.h \
+    ui/media_info_dialog.h
 
 FORMS += \
     mainwindow.ui
 
 INCLUDEPATH += $$PWD/src/player
+INCLUDEPATH += $$PWD/ui
 
 win32 {
     FFMPEG_ROOT = E:/me-lessons/code_test/ffplay_study/3rdlib/ffmepg-4.4-study

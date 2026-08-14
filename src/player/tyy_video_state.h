@@ -82,32 +82,6 @@ enum MediaEndActionFlag {
 	MediaEndAction_KeepDisplay,
 };
 
-#pragma pack(1)
-class LoginParam {
-public:
-	char ip[20];
-	unsigned short port;
-	char user[12];
-	char pwd[32];
-};
-
-class PlayParam {
-public:
-	long channel;
-	unsigned long streamType;
-	unsigned long linkMode;
-	unsigned long blocked;
-	HWND playWnd;
-	char url[1024];
-};
-
-class playerParam {
-public:
-	LoginParam loginStruct;
-	PlayParam playStruct;
-};
-#pragma pack()
-
 #define MAX_QUEUE_SIZE (15 * 1024 * 1024)
 #define MIN_FRAMES 25
 #define EXTERNAL_CLOCK_MIN_FRAMES 2
@@ -179,8 +153,6 @@ enum {
 		void set_event_callback(TyyPlayerEventCallback callback, void *user_data);
 
 		bool play(const Properties &properties, int &return_val);
-
-//		bool play(int type, void* data, int data_size, int &return_val);
 
 		bool close();
 
@@ -577,7 +549,7 @@ enum {
 		TD3D11VA_Decoder *_d3d11va_decoder = NULL;
 		enum AVPixelFormat _hw_pix_fmt = AV_PIX_FMT_NONE;
 
-		std::atomic<ROEvent2SDL> _event_type{ ROEvent2SDL_UNKOWN };
+        std::atomic<Event2SDL> _event_type{ Event2SDL_UNKOWN };
 	};
 
 }

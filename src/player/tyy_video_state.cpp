@@ -2646,7 +2646,7 @@ void TyyVideoState::video_state_memset_zero() {
 	_ffmpeg_hw = NULL;
 	_d3d11va_decoder = NULL;
 
-	_event_type = ROEvent2SDL_UNKOWN;
+    _event_type = Event2SDL_UNKOWN;
 
 	TYYDEBUG("video_state_memset_zero memset zero end");
 }
@@ -3329,8 +3329,8 @@ void refresh_loop_wait_event(TyyVideoState *is, SDL_Event *event) {
 
 			TYYINFO("refresh_loop_wait_event receive abort request, break while");
 			break;
-		}else if ((is->_abort_request_w > 0 && is->_abort_request == 0) || is->_event_type == ROEvent2SDL_REFRESH) {
-			is->_event_type = ROEvent2SDL_NULL;
+        }else if ((is->_abort_request_w > 0 && is->_abort_request == 0) || is->_event_type == Event2SDL_REFRESH) {
+            is->_event_type = Event2SDL_NULL;
 
 			if (is->_end_flag == MediaEndAction_Default) {
 				TYYERROR("refresh_loop_wait_event _end_flag: {}", MediaEndAction_Default);
@@ -3504,64 +3504,6 @@ bool TyyVideoState::play(const Properties &properties, int &return_val) {
 	return_val = 0;
 	return true;
 }
-
-//bool TyyVideoState::play(int type, void* data, int data_size, int &return_val) {
-//	(void)type;
-
-//	TYYTRACE("WINID: {}, start", _win_id);
-
-//	std::lock_guard<std::mutex> lg(_mutex_play_close);
-
-//	if (!data || data_size <= 0) {
-//		return_val = TYY_PLAYER_ERROR_INVALID_PARAM;
-//		return false;
-//	}
-
-//	if (_player_state) {
-//		return_val = TYY_PLAYER_ERROR_STATE_FAILED;
-//		return false;
-//	}
-
-//	playerParam *ffParam = (playerParam*)data;
-//	Properties properties;
-//	properties.set_property(TYY_VIDEO_STATE_PROPERTY_WIN_ID,
-//						   static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ffParam->playStruct.playWnd)));
-//	properties.set_property(TYY_VIDEO_STATE_PROPERTY_URL, ffParam->playStruct.url);
-//	bool ret = init(properties);
-//	if (ret == false) {
-//		return_val = TYY_PLAYER_ERROR_STATE_FAILED;
-//		TYYERROR("TyyVideoState init failed");
-//		return false;
-//	}
-
-//	ret = open_input();
-//	if (ret != 0) {
-//		return_val = TYY_PLAYER_ERROR_OPEN_INPUT_FAILED;
-//		TYYERROR("open_input failed");
-//		deinit();
-//		return false;
-//	}
-
-//	_read_tid = SDL_CreateThread(read_thread, "read_thread", this);
-//	if (!_read_tid) {
-//		return_val = TYY_PLAYER_ERROR_PLAY_FAILED;
-//		TYYERROR("create read thread failed, errno: {}", SDL_GetError());
-//		return false;
-//	}
-
-//	_write_tid = SDL_CreateThread(write_thread, "write_thread", this);
-//	if (!_write_tid) {
-//		return_val = TYY_PLAYER_ERROR_PLAY_FAILED;
-//		TYYERROR("create write thread failed, errno: {}", SDL_GetError());
-//		return false;
-//	}
-
-//	TYYTRACE("end");
-
-//	_player_state = 1;
-//	return_val = 0;
-//	return true;
-//}
 
 void TyyVideoState::stream_component_close(int stream_index)
 {
@@ -3745,7 +3687,7 @@ MediaEndActionFlag TyyVideoState::get_media_end_flag() {
 
 void TyyVideoState::set_force_refresh(bool fr) {
 
-	_event_type = fr == true ? ROEvent2SDL_REFRESH : ROEvent2SDL_NULL;
+    _event_type = fr == true ? Event2SDL_REFRESH : Event2SDL_NULL;
 }
 
 void TyyVideoState::on_user_fb_seek(int fb, int seek_interval) {

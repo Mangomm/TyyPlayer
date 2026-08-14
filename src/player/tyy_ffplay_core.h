@@ -37,10 +37,10 @@ typedef enum
 
 typedef enum
 {
-    ROEvent2SDL_UNKOWN,
-    ROEvent2SDL_NULL,
-    ROEvent2SDL_REFRESH
-} ROEvent2SDL;
+    Event2SDL_UNKOWN,
+    Event2SDL_NULL,
+    Event2SDL_REFRESH
+} Event2SDL;
 
 typedef struct HWDevice
 {

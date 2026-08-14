@@ -439,6 +439,8 @@ private:
 
     void show_progress_preview(const QPoint &position);
 
+    void seek_progress_at(const QPoint &position);
+
     void hide_progress_preview();
 
     /**

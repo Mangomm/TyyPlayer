@@ -89,6 +89,8 @@ public:
     */
     int seek(int forward, int seek_interval);
 
+    int seek_to(int position_seconds, int duration_seconds);
+
     /**
     * @brief 单步播放下一帧
     * @author: tyy

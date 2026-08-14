@@ -179,6 +179,8 @@ TYY_PLAYER_API int tyy_player_pause(TyyPlayerHandle handle, int pause);
 */
 TYY_PLAYER_API int tyy_player_seek(TyyPlayerHandle handle, int forward, int seek_interval);
 
+TYY_PLAYER_API int tyy_player_seek_to(TyyPlayerHandle handle, int position_seconds, int duration_seconds);
+
 /**
 * @brief 单步播放下一帧
 * @author: tyy

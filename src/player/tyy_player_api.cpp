@@ -93,6 +93,16 @@ int tyy_player_seek(TyyPlayerHandle handle, int forward, int seek_interval)
     return player->seek(forward, seek_interval);
 }
 
+int tyy_player_seek_to(TyyPlayerHandle handle, int position_seconds, int duration_seconds)
+{
+    TyyPlayerCore *player = static_cast<TyyPlayerCore *>(handle);
+    if (player == nullptr)
+    {
+        return TYY_PLAYER_ERROR_INVALID_PARAM;
+    }
+    return player->seek_to(position_seconds, duration_seconds);
+}
+
 int tyy_player_step_to_next_frame(TyyPlayerHandle handle)
 {
     TyyPlayerCore *player = static_cast<TyyPlayerCore *>(handle);

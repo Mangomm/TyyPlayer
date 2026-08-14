@@ -1126,6 +1126,49 @@ void MainWindow::show_progress_preview(const QPoint &position)
     }
 }
 
+void MainWindow::seek_progress_at(const QPoint &position)
+{
+    if (_progress_slider == nullptr || !_progress_slider->isEnabled() || _duration_seconds <= 0)
+    {
+        return;
+    }
+
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
+    if (player_handle == nullptr || screen_index < 0 || screen_index >= _screen_positions.size())
+    {
+        return;
+    }
+
+    int slider_width = _progress_slider->width();
+    if (slider_width <= 0)
+    {
+        return;
+    }
+
+    int x = position.x();
+    if (x < 0)
+    {
+        x = 0;
+    }
+    if (x > slider_width)
+    {
+        x = slider_width;
+    }
+
+    int position_seconds = x * _duration_seconds / slider_width;
+    int ret = tyy_player_seek_to(player_handle, position_seconds, _duration_seconds);
+    if (ret != TYY_PLAYER_ERROR_OK)
+    {
+        QMessageBox::warning(this, "TyyPlayer", QString("Seek media failed, error=%1").arg(ret));
+        return;
+    }
+
+    _screen_positions[screen_index] = position_seconds;
+    _progress_slider->setValue(position_seconds);
+    _time_label->setText(format_time(position_seconds) + " / " + format_time(_duration_seconds));
+}
+
 void MainWindow::hide_progress_preview()
 {
     if (_preview_timer != nullptr)
@@ -1142,6 +1185,15 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
     if (watched == _progress_slider && event != nullptr)
     {
+        if (event->type() == QEvent::MouseButtonPress)
+        {
+            QMouseEvent *mouse_event = static_cast<QMouseEvent *>(event);
+            if (mouse_event->button() == Qt::LeftButton)
+            {
+                seek_progress_at(mouse_event->pos());
+                return true;
+            }
+        }
         if (event->type() == QEvent::MouseMove)
         {
             QMouseEvent *mouse_event = static_cast<QMouseEvent *>(event);

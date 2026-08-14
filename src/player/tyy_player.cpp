@@ -140,6 +140,25 @@ int TyyPlayerCore::seek(int forward, int seek_interval)
     return TYY_PLAYER_ERROR_OK;
 }
 
+int TyyPlayerCore::seek_to(int position_seconds, int duration_seconds)
+{
+    if (!_is_started)
+    {
+        return TYY_PLAYER_ERROR_STATE_FAILED;
+    }
+    if (position_seconds < 0 || duration_seconds <= 0)
+    {
+        return TYY_PLAYER_ERROR_INVALID_PARAM;
+    }
+    if (position_seconds > duration_seconds)
+    {
+        position_seconds = duration_seconds;
+    }
+
+    _video_state->on_user_seek(static_cast<double>(position_seconds) / duration_seconds);
+    return TYY_PLAYER_ERROR_OK;
+}
+
 int TyyPlayerCore::step_to_next_frame()
 {
     if (!_is_started)

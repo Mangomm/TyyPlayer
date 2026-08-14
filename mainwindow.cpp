@@ -3,6 +3,7 @@
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QComboBox>
 #include <QDir>
 #include <QEvent>
 #include <QFileDialog>
@@ -77,6 +78,7 @@ MainWindow::MainWindow(QWidget *parent)
       _playlist_toggle_button(nullptr),
       _progress_slider(nullptr),
       _volume_slider(nullptr),
+      _speed_combo_box(nullptr),
       _play_timer(nullptr),
       _overlay_hide_timer(nullptr),
       _duration_seconds(300),
@@ -126,6 +128,7 @@ void MainWindow::init_ui()
 
     _progress_slider = new QSlider(Qt::Horizontal, _control_widget);
     _progress_slider->setRange(0, _duration_seconds);
+    _progress_slider->setEnabled(false);
 
     QHBoxLayout *button_layout = new QHBoxLayout();
     button_layout->setContentsMargins(0, 0, 0, 0);
@@ -167,6 +170,17 @@ void MainWindow::init_ui()
     _volume_slider->setValue(80);
     _volume_slider->setMaximumWidth(160);
 
+    QLabel *speed_label = new QLabel("Speed", _control_widget);
+    _speed_combo_box = new QComboBox(_control_widget);
+    _speed_combo_box->addItem("0.5x", 0.5);
+    _speed_combo_box->addItem("0.75x", 0.75);
+    _speed_combo_box->addItem("1.0x", 1.0);
+    _speed_combo_box->addItem("1.5x", 1.5);
+    _speed_combo_box->addItem("1.75x", 1.75);
+    _speed_combo_box->addItem("2.0x", 2.0);
+    _speed_combo_box->setCurrentIndex(2);
+    _speed_combo_box->setEnabled(false);
+
     _playlist_toggle_button = new QPushButton(_control_widget);
     _playlist_toggle_button->setFixedSize(32, 28);
     _playlist_toggle_button->setCursor(Qt::PointingHandCursor);
@@ -182,6 +196,8 @@ void MainWindow::init_ui()
     button_layout->addWidget(_time_label);
     button_layout->addStretch();
     button_layout->addWidget(_playlist_toggle_button);
+    button_layout->addWidget(speed_label);
+    button_layout->addWidget(_speed_combo_box);
     button_layout->addWidget(volume_label);
     button_layout->addWidget(_volume_slider);
 
@@ -244,6 +260,7 @@ void MainWindow::init_connections()
     connect(_stop_button, SIGNAL(clicked()), this, SLOT(stop_play()));
     connect(_progress_slider, SIGNAL(sliderMoved(int)), this, SLOT(set_play_position(int)));
     connect(_volume_slider, SIGNAL(valueChanged(int)), this, SLOT(set_volume_value(int)));
+    connect(_speed_combo_box, SIGNAL(currentIndexChanged(int)), this, SLOT(set_speed_value(int)));
     connect(_play_timer, SIGNAL(timeout()), this, SLOT(on_play_timer()));
     connect(_playlist_widget, SIGNAL(currentRowChanged(int)), this, SLOT(on_playlist_row_changed(int)));
     connect(_playlist_widget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(play_playlist_item(QListWidgetItem*)));
@@ -274,6 +291,9 @@ void MainWindow::init_video_grid(QWidget *parent)
         _player_handles.push_back(nullptr);
         _screen_playing.push_back(false);
         _screen_paused.push_back(false);
+        _screen_volumes.push_back(80);
+        _screen_positions.push_back(0);
+        _screen_speeds.push_back(1.0f);
         update_video_label_style(index);
 
         QPushButton *full_screen_button = new QPushButton(_video_widget);
@@ -395,6 +415,9 @@ void MainWindow::toggle_play()
     _selected_screen_index = -1;
     update_video_label_style(old_screen_index);
     update_pause_button_state();
+    update_volume_slider_state();
+    update_speed_combo_box_state();
+    update_progress_slider_state();
 }
 
 void MainWindow::toggle_pause()
@@ -442,6 +465,9 @@ void MainWindow::stop_play()
     _progress_slider->setValue(0);
     _time_label->setText(format_time(0) + " / " + format_time(_duration_seconds));
     update_current_media(_playlist_widget->currentRow());
+    update_volume_slider_state();
+    update_speed_combo_box_state();
+    update_progress_slider_state();
 }
 
 void MainWindow::seek_backward()
@@ -458,7 +484,8 @@ void MainWindow::seek_backward()
         }
     }
 
-    int position = _progress_slider->value() - 5;
+    int position = (screen_index >= 0 && screen_index < _screen_positions.size()) ?
+        _screen_positions[screen_index] - 5 : _progress_slider->value() - 5;
     if (position < 0)
     {
         position = 0;
@@ -480,7 +507,8 @@ void MainWindow::seek_forward()
         }
     }
 
-    int position = _progress_slider->value() + 5;
+    int position = (screen_index >= 0 && screen_index < _screen_positions.size()) ?
+        _screen_positions[screen_index] + 5 : _progress_slider->value() + 5;
     if (position > _duration_seconds)
     {
         position = _duration_seconds;
@@ -510,18 +538,75 @@ void MainWindow::step_forward()
 
 void MainWindow::set_play_position(int position)
 {
+    int screen_index = -1;
+    get_current_player_handle(&screen_index);
+    if (screen_index >= 0 && screen_index < _screen_positions.size())
+    {
+        _screen_positions[screen_index] = position;
+    }
+
     _progress_slider->setValue(position);
     _time_label->setText(format_time(position) + " / " + format_time(_duration_seconds));
 }
 
 void MainWindow::set_volume_value(int volume)
 {
-    setWindowTitle(QString("TyyPlayer - Volume %1%").arg(volume));
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
+    if (screen_index >= 0 && screen_index < _screen_volumes.size())
+    {
+        _screen_volumes[screen_index] = volume;
+    }
+
+    if (player_handle == nullptr)
+    {
+        return;
+    }
+
+    int ret = tyy_player_set_volume(player_handle, volume);
+    if (ret != TYY_PLAYER_ERROR_OK)
+    {
+        QMessageBox::warning(this, "TyyPlayer", QString("Set volume failed, error=%1").arg(ret));
+    }
+}
+
+void MainWindow::set_speed_value(int index)
+{
+    if (_speed_combo_box == nullptr || index < 0)
+    {
+        return;
+    }
+
+    float speed = static_cast<float>(_speed_combo_box->itemData(index).toDouble());
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
+    if (screen_index >= 0 && screen_index < _screen_speeds.size())
+    {
+        _screen_speeds[screen_index] = speed;
+    }
+
+    if (player_handle == nullptr)
+    {
+        return;
+    }
+
+    int ret = tyy_player_set_speed(player_handle, speed);
+    if (ret != TYY_PLAYER_ERROR_OK)
+    {
+        QMessageBox::warning(this, "TyyPlayer", QString("Set speed failed, error=%1").arg(ret));
+    }
 }
 
 void MainWindow::on_play_timer()
 {
-    int position = _progress_slider->value() + 1;
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
+    if (player_handle == nullptr || screen_index < 0 || screen_index >= _screen_positions.size())
+    {
+        return;
+    }
+
+    int position = _screen_positions[screen_index] + 1;
     if (position >= _duration_seconds)
     {
         position = _duration_seconds;
@@ -873,6 +958,70 @@ void MainWindow::update_pause_button_state()
     }
 }
 
+void MainWindow::update_volume_slider_state()
+{
+    if (_volume_slider == nullptr)
+    {
+        return;
+    }
+
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
+    bool has_player = player_handle != nullptr && screen_index >= 0 && screen_index < _screen_volumes.size();
+    int volume = has_player ? _screen_volumes[screen_index] : _volume_slider->value();
+
+    bool old_block_state = _volume_slider->blockSignals(true);
+    _volume_slider->setValue(volume);
+    _volume_slider->blockSignals(old_block_state);
+    _volume_slider->setEnabled(has_player);
+}
+
+void MainWindow::update_speed_combo_box_state()
+{
+    if (_speed_combo_box == nullptr)
+    {
+        return;
+    }
+
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
+    bool has_player = player_handle != nullptr && screen_index >= 0 && screen_index < _screen_speeds.size();
+    float speed = has_player ? _screen_speeds[screen_index] : 1.0f;
+    int speed_index = 2;
+    for (int index = 0; index < _speed_combo_box->count(); ++index)
+    {
+        if (static_cast<float>(_speed_combo_box->itemData(index).toDouble()) == speed)
+        {
+            speed_index = index;
+            break;
+        }
+    }
+
+    bool old_block_state = _speed_combo_box->blockSignals(true);
+    _speed_combo_box->setCurrentIndex(speed_index);
+    _speed_combo_box->blockSignals(old_block_state);
+    _speed_combo_box->setEnabled(has_player);
+}
+
+void MainWindow::update_progress_slider_state()
+{
+    if (_progress_slider == nullptr)
+    {
+        return;
+    }
+
+    int screen_index = -1;
+    TyyPlayerHandle player_handle = get_current_player_handle(&screen_index);
+    bool has_player = player_handle != nullptr && screen_index >= 0 && screen_index < _screen_positions.size();
+    int position = has_player ? _screen_positions[screen_index] : 0;
+
+    bool old_block_state = _progress_slider->blockSignals(true);
+    _progress_slider->setValue(position);
+    _progress_slider->blockSignals(old_block_state);
+    _progress_slider->setEnabled(has_player);
+    _time_label->setText(format_time(position) + " / " + format_time(_duration_seconds));
+}
+
 TyyPlayerHandle MainWindow::get_current_player_handle(int *screen_index) const
 {
     int current_screen_index = -1;
@@ -989,6 +1138,9 @@ void MainWindow::select_video_screen(int screen_index)
     update_video_label_style(old_screen_index);
     update_video_label_style(_selected_screen_index);
     update_pause_button_state();
+    update_volume_slider_state();
+    update_speed_combo_box_state();
+    update_progress_slider_state();
 }
 
 void MainWindow::update_video_label_style(int screen_index)
@@ -1332,12 +1484,28 @@ int MainWindow::start_current_media(int screen_index)
         return ret;
     }
 
+    if (screen_index < _screen_volumes.size())
+    {
+        tyy_player_set_volume(player_handle, _screen_volumes[screen_index]);
+    }
+    if (screen_index < _screen_speeds.size())
+    {
+        tyy_player_set_speed(player_handle, _screen_speeds[screen_index]);
+    }
+
     _player_handles[screen_index] = player_handle;
     _screen_playing[screen_index] = true;
     _screen_paused[screen_index] = false;
+    if (screen_index < _screen_positions.size())
+    {
+        _screen_positions[screen_index] = 0;
+    }
     _player_handle = player_handle;
     update_video_label_style(screen_index);
     update_pause_button_state();
+    update_volume_slider_state();
+    update_speed_combo_box_state();
+    update_progress_slider_state();
 
     return TYY_PLAYER_ERROR_OK;
 }
@@ -1373,6 +1541,10 @@ void MainWindow::release_screen_player(int screen_index)
     {
         _screen_paused[screen_index] = false;
     }
+    if (screen_index < _screen_positions.size())
+    {
+        _screen_positions[screen_index] = 0;
+    }
     if (_overlay_screen_index == screen_index)
     {
         hide_video_overlay();
@@ -1387,6 +1559,9 @@ void MainWindow::release_screen_player(int screen_index)
         _video_labels[screen_index]->setUpdatesEnabled(true);
     }
     update_pause_button_state();
+    update_volume_slider_state();
+    update_speed_combo_box_state();
+    update_progress_slider_state();
 }
 
 int MainWindow::get_split_columns(int split_count) const

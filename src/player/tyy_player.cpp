@@ -124,6 +124,42 @@ int TyyPlayerCore::step_to_next_frame()
     return TYY_PLAYER_ERROR_OK;
 }
 
+int TyyPlayerCore::set_volume(int volume)
+{
+    if (volume < 0 || volume > 100)
+    {
+        return TYY_PLAYER_ERROR_INVALID_PARAM;
+    }
+    if (!_is_started)
+    {
+        return TYY_PLAYER_ERROR_STATE_FAILED;
+    }
+
+    return _video_state->set_audio_volume(volume) ? TYY_PLAYER_ERROR_OK : TYY_PLAYER_ERROR_INVALID_PARAM;
+}
+
+int TyyPlayerCore::set_speed(float speed)
+{
+    bool is_supported_speed =
+        speed == 0.5f ||
+        speed == 0.75f ||
+        speed == 1.0f ||
+        speed == 1.5f ||
+        speed == 1.75f ||
+        speed == 2.0f;
+    if (!is_supported_speed)
+    {
+        return TYY_PLAYER_ERROR_INVALID_PARAM;
+    }
+    if (!_is_started)
+    {
+        return TYY_PLAYER_ERROR_STATE_FAILED;
+    }
+
+    _video_state->change_speed(speed);
+    return TYY_PLAYER_ERROR_OK;
+}
+
 int TyyPlayerCore::stop()
 {
     if (!_is_started)

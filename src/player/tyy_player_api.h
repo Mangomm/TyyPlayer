@@ -135,6 +135,26 @@ TYY_PLAYER_API int tyy_player_seek(TyyPlayerHandle handle, int forward, int seek
 TYY_PLAYER_API int tyy_player_step_to_next_frame(TyyPlayerHandle handle);
 
 /**
+* @brief 设置播放音量
+* @author: tyy
+* @param[in] handle 播放器句柄
+* @param[in] volume 音量值，范围0到100
+* @return 错误码
+* @note:
+*/
+TYY_PLAYER_API int tyy_player_set_volume(TyyPlayerHandle handle, int volume);
+
+/**
+* @brief 设置播放倍速
+* @author: tyy
+* @param[in] handle 播放器句柄
+* @param[in] speed 播放倍速
+* @return 错误码
+* @note:
+*/
+TYY_PLAYER_API int tyy_player_set_speed(TyyPlayerHandle handle, float speed);
+
+/**
 * @brief 停止播放
 * @author: tyy
 * @param[in] handle 播放器句柄

@@ -95,6 +95,24 @@ public:
     int step_to_next_frame();
 
     /**
+    * @brief 设置播放音量
+    * @author: tyy
+    * @param[in] volume 音量值，范围0到100
+    * @return 错误码
+    * @note:
+    */
+    int set_volume(int volume);
+
+    /**
+    * @brief 设置播放倍速
+    * @author: tyy
+    * @param[in] speed 播放倍速
+    * @return 错误码
+    * @note:
+    */
+    int set_speed(float speed);
+
+    /**
     * @brief 停止播放
     * @author: tyy
     * @param 无

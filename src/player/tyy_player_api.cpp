@@ -83,6 +83,26 @@ int tyy_player_step_to_next_frame(TyyPlayerHandle handle)
     return player->step_to_next_frame();
 }
 
+int tyy_player_set_volume(TyyPlayerHandle handle, int volume)
+{
+    TyyPlayerCore *player = static_cast<TyyPlayerCore *>(handle);
+    if (player == nullptr)
+    {
+        return TYY_PLAYER_ERROR_INVALID_PARAM;
+    }
+    return player->set_volume(volume);
+}
+
+int tyy_player_set_speed(TyyPlayerHandle handle, float speed)
+{
+    TyyPlayerCore *player = static_cast<TyyPlayerCore *>(handle);
+    if (player == nullptr)
+    {
+        return TYY_PLAYER_ERROR_INVALID_PARAM;
+    }
+    return player->set_speed(speed);
+}
+
 int tyy_player_stop(TyyPlayerHandle handle)
 {
     TyyPlayerCore *player = static_cast<TyyPlayerCore *>(handle);

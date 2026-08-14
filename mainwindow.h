@@ -11,6 +11,7 @@ namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
 class QLabel;
+class QComboBox;
 class QGridLayout;
 class QListWidget;
 class QListWidgetItem;
@@ -147,6 +148,15 @@ private slots:
     void set_volume_value(int volume);
 
     /**
+    * @brief 设置播放倍速
+    * @author: tyy
+    * @param[in] index 倍速选项索引
+    * @return 无
+    * @note:
+    */
+    void set_speed_value(int index);
+
+    /**
     * @brief 播放定时器回调
     * @author: tyy
     * @param 无
@@ -272,6 +282,33 @@ private:
     * @note:
     */
     void update_pause_button_state();
+
+    /**
+    * @brief 更新音量滑块状态
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void update_volume_slider_state();
+
+    /**
+    * @brief 更新倍速下拉框状态
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void update_speed_combo_box_state();
+
+    /**
+    * @brief 更新进度条状态
+    * @author: tyy
+    * @param 无
+    * @return 无
+    * @note:
+    */
+    void update_progress_slider_state();
 
     /**
     * @brief 获取当前操作的播放器句柄
@@ -475,6 +512,15 @@ private:
     // 每个分屏当前是否处于暂停状态
     QVector<bool> _screen_paused;
 
+    // 每个分屏当前音量值
+    QVector<int> _screen_volumes;
+
+    // 每个分屏当前播放进度
+    QVector<int> _screen_positions;
+
+    // 每个分屏当前播放倍速
+    QVector<float> _screen_speeds;
+
     // 每个分屏对应的悬浮全屏按钮
     QVector<QPushButton *> _video_full_screen_buttons;
 
@@ -510,6 +556,9 @@ private:
 
     // 音量调节滑块
     QSlider *_volume_slider;
+
+    // 倍速选择下拉框
+    QComboBox *_speed_combo_box;
 
     // 模拟播放进度的定时器
     QTimer *_play_timer;

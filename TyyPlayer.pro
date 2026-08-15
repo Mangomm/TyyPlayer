@@ -50,10 +50,16 @@ HEADERS += \
 FORMS += \
     mainwindow.ui
 
+RESOURCES += \
+    ui/qss/theme.qrc \
+    ui/icons/app_icon.qrc
+
 INCLUDEPATH += $$PWD/src/player
 INCLUDEPATH += $$PWD/ui
 
 win32 {
+    RC_ICONS += ui/icons/app_icon.ico
+
     FFMPEG_ROOT = E:/me-lessons/code_test/ffplay_study/3rdlib/ffmepg-4.4-study
     SDL_ROOT = E:/me-lessons/code_test/ffplay_study/3rdlib/libsdl2
     INCLUDEPATH += $$FFMPEG_ROOT/include

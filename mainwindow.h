@@ -160,6 +160,8 @@ private slots:
 
     void set_decoder_type_value(int index);
 
+    void set_theme_value(int index);
+
     /**
     * @brief 播放定时器回调
     * @author: tyy
@@ -443,6 +445,12 @@ private:
 
     void hide_progress_preview();
 
+    void apply_theme(int theme_type);
+
+    QString get_theme_qss_file(int theme_type) const;
+
+    void apply_window_title_bar_theme(bool is_dark_theme);
+
     /**
     * @brief 获取下一次播放使用的分屏索引
     * @author: tyy
@@ -626,6 +634,9 @@ private:
 
     // Decoder type used when opening new media
     int _decoder_type;
+
+    // Current UI theme type
+    int _theme_type;
 
     // 模拟播放进度的定时器
     QTimer *_play_timer;

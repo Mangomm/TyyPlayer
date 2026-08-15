@@ -6,11 +6,13 @@
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QApplication>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QEvent>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -35,13 +37,20 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#endif
+
 #include "src/player/tyy_log.h"
 
 static const int SPLIT_SCREEN_COUNTS[] = {1, 2, 4, 9, 16, 32};
 static const int SPLIT_SCREEN_COUNT_SIZE = sizeof(SPLIT_SCREEN_COUNTS) / sizeof(SPLIT_SCREEN_COUNTS[0]);
 static const int MAX_SPLIT_SCREEN_COUNT = 32;
 static const char *SETTINGS_PLAYLIST_KEY = "playlist/files";
+static const char *SETTINGS_THEME_KEY = "ui/theme";
 static const char *SETTINGS_FILE_NAME = "playlist.ini";
+static const int THEME_TYPE_DARK = 0;
+static const int THEME_TYPE_GOLD_WHITE = 1;
 
 /**
 * @brief Get playlist settings file path
@@ -94,6 +103,7 @@ MainWindow::MainWindow(QWidget *parent)
       _preview_position(QPoint()),
       _preview_seconds(0),
       _decoder_type(TYY_PLAYER_DECODER_TYPE_SOFTWARE),
+      _theme_type(THEME_TYPE_DARK),
       _play_timer(nullptr),
       _overlay_hide_timer(nullptr),
       _duration_seconds(300),
@@ -111,6 +121,8 @@ MainWindow::MainWindow(QWidget *parent)
     init_ui();
     init_connections();
     load_playlist();
+    QSettings settings(get_playlist_settings_file(), QSettings::IniFormat);
+    apply_theme(settings.value(SETTINGS_THEME_KEY, THEME_TYPE_DARK).toInt());
 }
 
 MainWindow::~MainWindow()
@@ -130,22 +142,25 @@ void MainWindow::init_ui()
     resize(1200, 720);
 
     QHBoxLayout *main_layout = new QHBoxLayout(ui->centralwidget);
-    main_layout->setContentsMargins(8, 8, 8, 8);
-    main_layout->setSpacing(8);
+    main_layout->setContentsMargins(0, 0, 0, 0);
+    main_layout->setSpacing(0);
 
     _play_widget = new QWidget(ui->centralwidget);
+    _play_widget->setObjectName("playWidget");
     QVBoxLayout *play_layout = new QVBoxLayout(_play_widget);
     play_layout->setContentsMargins(0, 0, 0, 0);
-    play_layout->setSpacing(8);
+    play_layout->setSpacing(0);
 
     init_video_grid(_play_widget);
 
     _control_widget = new QWidget(_play_widget);
+    _control_widget->setObjectName("controlWidget");
     QVBoxLayout *control_layout = new QVBoxLayout(_control_widget);
     control_layout->setContentsMargins(0, 0, 0, 0);
     control_layout->setSpacing(6);
 
     _progress_slider = new QSlider(Qt::Horizontal, _control_widget);
+    _progress_slider->setObjectName("progressSlider");
     _progress_slider->setRange(0, _duration_seconds);
     _progress_slider->setEnabled(false);
     _progress_slider->setMouseTracking(true);
@@ -210,6 +225,7 @@ void MainWindow::init_ui()
     _speed_combo_box->setEnabled(false);
 
     _playlist_toggle_button = new QPushButton(_control_widget);
+    _playlist_toggle_button->setObjectName("playlistToggleButton");
     _playlist_toggle_button->setFlat(true);
     _playlist_toggle_button->setFocusPolicy(Qt::NoFocus);
     _playlist_toggle_button->setFixedSize(28, 28);
@@ -217,25 +233,10 @@ void MainWindow::init_ui()
     update_playlist_toggle_button();
 
     _settings_button = new QPushButton(_control_widget);
+    _settings_button->setObjectName("settingsButton");
     _settings_button->setFlat(true);
     _settings_button->setFocusPolicy(Qt::NoFocus);
     _settings_button->setText(QString(QChar(0x2699)));
-    _settings_button->setStyleSheet(
-        "QPushButton {"
-        " background: transparent;"
-        " color: #303030;"
-        " border: none;"
-        " font-size: 18px;"
-        " padding: 0px;"
-        "}"
-        "QPushButton:hover {"
-        " background: #e9eef6;"
-        " color: #202020;"
-        " border-radius: 4px;"
-        "}"
-        "QPushButton:pressed {"
-        " background: #d9e4f5;"
-        "}");
     _settings_button->setToolTip("Settings");
     _settings_button->setFixedSize(28, 28);
     _settings_button->setCursor(Qt::PointingHandCursor);
@@ -263,12 +264,14 @@ void MainWindow::init_ui()
     play_layout->addWidget(_control_widget);
 
     _playlist_panel = new QWidget(ui->centralwidget);
+    _playlist_panel->setObjectName("playlistPanel");
     _playlist_panel->setMinimumWidth(260);
     QVBoxLayout *playlist_layout = new QVBoxLayout(_playlist_panel);
     playlist_layout->setContentsMargins(0, 0, 0, 0);
     playlist_layout->setSpacing(6);
 
     QLabel *playlist_title = new QLabel("Playlist", _playlist_panel);
+    playlist_title->setObjectName("playlistTitle");
     _playlist_widget = new QListWidget(_playlist_panel);
     _playlist_widget->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
@@ -286,6 +289,7 @@ void MainWindow::init_ui()
     playlist_layout->addLayout(playlist_button_layout);
 
     QSplitter *main_splitter = new QSplitter(Qt::Horizontal, ui->centralwidget);
+    main_splitter->setObjectName("mainSplitter");
     main_splitter->addWidget(_play_widget);
     main_splitter->addWidget(_playlist_panel);
     main_splitter->setStretchFactor(0, 1);
@@ -665,6 +669,17 @@ void MainWindow::set_decoder_type_value(int index)
     _decoder_type = decoder_combo_box->itemData(index).toInt();
 }
 
+void MainWindow::set_theme_value(int index)
+{
+    QComboBox *theme_combo_box = qobject_cast<QComboBox *>(sender());
+    if (theme_combo_box == nullptr || index < 0)
+    {
+        return;
+    }
+
+    apply_theme(theme_combo_box->itemData(index).toInt());
+}
+
 void MainWindow::on_play_timer()
 {
     int screen_index = -1;
@@ -823,12 +838,12 @@ void MainWindow::toggle_full_screen()
         }
         if (ui->centralwidget->layout() != nullptr)
         {
-            ui->centralwidget->layout()->setContentsMargins(8, 8, 8, 8);
-            ui->centralwidget->layout()->setSpacing(8);
+            ui->centralwidget->layout()->setContentsMargins(0, 0, 0, 0);
+            ui->centralwidget->layout()->setSpacing(0);
         }
         if (_play_widget != nullptr && _play_widget->layout() != nullptr)
         {
-            _play_widget->layout()->setSpacing(8);
+            _play_widget->layout()->setSpacing(0);
         }
         showNormal();
     }
@@ -881,48 +896,31 @@ void MainWindow::show_settings_menu()
     main_layout->setSpacing(0);
 
     QPushButton *video_options_button = new QPushButton("Video Options", &dialog);
+    QPushButton *appearance_options_button = new QPushButton("Appearance Options", &dialog);
     QPushButton *help_button = new QPushButton("Help", &dialog);
+    video_options_button->setObjectName("settingsNavButtonFirst");
+    appearance_options_button->setObjectName("settingsNavButton");
+    help_button->setObjectName("settingsNavButton");
     video_options_button->setMinimumHeight(72);
+    appearance_options_button->setMinimumHeight(72);
     help_button->setMinimumHeight(72);
     video_options_button->setCursor(Qt::PointingHandCursor);
+    appearance_options_button->setCursor(Qt::PointingHandCursor);
     help_button->setCursor(Qt::PointingHandCursor);
 
     QWidget *left_widget = new QWidget(&dialog);
+    left_widget->setObjectName("settingsLeftPanel");
     left_widget->setFixedWidth(180);
-    left_widget->setStyleSheet("QWidget { background: #f5f5f5; border-right: 1px solid #cfcfcf; }");
     QVBoxLayout *left_layout = new QVBoxLayout(left_widget);
     left_layout->setContentsMargins(0, 0, 0, 0);
     left_layout->setSpacing(0);
     left_layout->addWidget(video_options_button);
+    left_layout->addWidget(appearance_options_button);
     left_layout->addWidget(help_button);
     left_layout->addStretch();
 
-    QString option_button_style =
-        "QPushButton {"
-        " background: #ffffff;"
-        " color: #202020;"
-        " border: none;"
-        " border-bottom: 1px solid #d8d8d8;"
-        " padding-left: 18px;"
-        " text-align: left;"
-        " font-size: 14px;"
-        "}"
-        "QPushButton:hover {"
-        " background: #eef4ff;"
-        "}"
-        "QPushButton:pressed {"
-        " background: #dbe9ff;"
-        "}";
-    video_options_button->setStyleSheet(option_button_style);
-    video_options_button->setStyleSheet(
-        option_button_style +
-        "QPushButton {"
-        " border-top: 1px solid #d8d8d8;"
-        "}");
-    help_button->setStyleSheet(option_button_style);
-
     QStackedWidget *content_widget = new QStackedWidget(&dialog);
-    content_widget->setStyleSheet("QStackedWidget { background: #ffffff; }");
+    content_widget->setObjectName("settingsContent");
 
     QWidget *video_page = new QWidget(content_widget);
     QVBoxLayout *video_layout = new QVBoxLayout(video_page);
@@ -949,6 +947,27 @@ void MainWindow::show_settings_menu()
     video_layout->addLayout(decoder_layout);
     video_layout->addStretch();
 
+    QWidget *appearance_page = new QWidget(content_widget);
+    QVBoxLayout *appearance_layout = new QVBoxLayout(appearance_page);
+    appearance_layout->setContentsMargins(28, 24, 28, 24);
+    QLabel *appearance_title = new QLabel("Appearance Options", appearance_page);
+    appearance_title->setFont(title_font);
+    QFormLayout *theme_layout = new QFormLayout();
+    QComboBox *theme_combo_box = new QComboBox(appearance_page);
+    theme_combo_box->addItem("Dark", THEME_TYPE_DARK);
+    theme_combo_box->addItem("Gold White", THEME_TYPE_GOLD_WHITE);
+    int theme_index = theme_combo_box->findData(_theme_type);
+    if (theme_index >= 0)
+    {
+        theme_combo_box->setCurrentIndex(theme_index);
+    }
+    connect(theme_combo_box, SIGNAL(currentIndexChanged(int)), this, SLOT(set_theme_value(int)));
+    theme_layout->addRow("Theme", theme_combo_box);
+    appearance_layout->addWidget(appearance_title);
+    appearance_layout->addSpacing(16);
+    appearance_layout->addLayout(theme_layout);
+    appearance_layout->addStretch();
+
     QWidget *help_page = new QWidget(content_widget);
     QVBoxLayout *help_layout = new QVBoxLayout(help_page);
     help_layout->setContentsMargins(28, 24, 28, 24);
@@ -967,13 +986,17 @@ void MainWindow::show_settings_menu()
     help_layout->addStretch();
 
     content_widget->addWidget(video_page);
+    content_widget->addWidget(appearance_page);
     content_widget->addWidget(help_page);
 
     connect(video_options_button, &QPushButton::clicked, content_widget, [content_widget]() {
         content_widget->setCurrentIndex(0);
     });
-    connect(help_button, &QPushButton::clicked, content_widget, [content_widget]() {
+    connect(appearance_options_button, &QPushButton::clicked, content_widget, [content_widget]() {
         content_widget->setCurrentIndex(1);
+    });
+    connect(help_button, &QPushButton::clicked, content_widget, [content_widget]() {
+        content_widget->setCurrentIndex(2);
     });
 
     main_layout->addWidget(left_widget);
@@ -1062,22 +1085,6 @@ void MainWindow::update_playlist_toggle_button()
 
     _playlist_toggle_button->setText(QString(QChar(0x2630)));
     _playlist_toggle_button->setToolTip(_playlist_visible ? "Hide playlist" : "Show playlist");
-    _playlist_toggle_button->setStyleSheet(
-        "QPushButton {"
-        " background: transparent;"
-        " color: #303030;"
-        " border: none;"
-        " font-size: 18px;"
-        " padding: 0px;"
-        "}"
-        "QPushButton:hover {"
-        " background: #e9eef6;"
-        " color: #202020;"
-        " border-radius: 4px;"
-        "}"
-        "QPushButton:pressed {"
-        " background: #d9e4f5;"
-        "}");
 }
 
 int MainWindow::get_video_screen_index_at(const QPoint &position) const
@@ -1179,6 +1186,90 @@ void MainWindow::hide_progress_preview()
     {
         _preview_widget->hide();
     }
+}
+
+void MainWindow::apply_theme(int theme_type)
+{
+    QString qss_file = get_theme_qss_file(theme_type);
+    QFile file(qss_file);
+    if (!file.open(QFile::ReadOnly | QFile::Text))
+    {
+        return;
+    }
+
+    _theme_type = theme_type;
+    qApp->setStyleSheet(QString::fromUtf8(file.readAll()));
+    apply_window_title_bar_theme(_theme_type == THEME_TYPE_DARK);
+    QSettings settings(get_playlist_settings_file(), QSettings::IniFormat);
+    settings.setValue(SETTINGS_THEME_KEY, _theme_type);
+    update_video_label_style(_selected_screen_index);
+    for (int index = 0; index < _split_screen_count && index < _video_labels.size(); ++index)
+    {
+        update_video_label_style(index);
+    }
+}
+
+QString MainWindow::get_theme_qss_file(int theme_type) const
+{
+    if (theme_type == THEME_TYPE_GOLD_WHITE)
+    {
+        return ":/qss/gold_white.qss";
+    }
+
+    return ":/qss/dark.qss";
+}
+
+void MainWindow::apply_window_title_bar_theme(bool is_dark_theme)
+{
+#ifdef Q_OS_WIN
+    typedef HRESULT (WINAPI *DwmSetWindowAttributeProc)(HWND, DWORD, LPCVOID, DWORD);
+
+    HMODULE dwm_module = LoadLibraryW(L"dwmapi.dll");
+    if (dwm_module == nullptr)
+    {
+        return;
+    }
+
+    DwmSetWindowAttributeProc set_window_attribute =
+        reinterpret_cast<DwmSetWindowAttributeProc>(GetProcAddress(dwm_module, "DwmSetWindowAttribute"));
+    if (set_window_attribute == nullptr)
+    {
+        FreeLibrary(dwm_module);
+        return;
+    }
+
+    HWND window_handle = reinterpret_cast<HWND>(winId());
+    BOOL dark_value = is_dark_theme ? TRUE : FALSE;
+    const DWORD use_immersive_dark_mode = 20;
+    const DWORD use_immersive_dark_mode_before_20h1 = 19;
+
+    HRESULT result = set_window_attribute(
+        window_handle,
+        use_immersive_dark_mode,
+        &dark_value,
+        sizeof(dark_value));
+    if (FAILED(result))
+    {
+        set_window_attribute(
+            window_handle,
+            use_immersive_dark_mode_before_20h1,
+            &dark_value,
+            sizeof(dark_value));
+    }
+
+    SetWindowPos(
+        window_handle,
+        nullptr,
+        0,
+        0,
+        0,
+        0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+
+    FreeLibrary(dwm_module);
+#else
+    Q_UNUSED(is_dark_theme);
+#endif
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
@@ -1564,11 +1655,25 @@ void MainWindow::update_video_label_style(int screen_index)
 
     if (screen_index == _selected_screen_index)
     {
-        video_label->setStyleSheet("QLabel { background: #101010; color: #d8d8d8; border: 2px solid #2f80ff; }");
+        if (_theme_type == THEME_TYPE_GOLD_WHITE)
+        {
+            video_label->setStyleSheet("QLabel { background: #fffdf8; color: #5a4520; border: 2px solid #c79528; }");
+        }
+        else
+        {
+            video_label->setStyleSheet("QLabel { background: #101010; color: #d8d8d8; border: 2px solid #2f80ff; }");
+        }
     }
     else
     {
-        video_label->setStyleSheet("QLabel { background: #101010; color: #d8d8d8; border: 1px solid #303030; }");
+        if (_theme_type == THEME_TYPE_GOLD_WHITE)
+        {
+            video_label->setStyleSheet("QLabel { background: #fffaf0; color: #6b5a35; border: 1px solid #d8c79f; }");
+        }
+        else
+        {
+            video_label->setStyleSheet("QLabel { background: #101010; color: #d8d8d8; border: 1px solid #303030; }");
+        }
     }
 }
 
@@ -1749,12 +1854,12 @@ void MainWindow::exit_video_screen_full_screen()
     }
     if (ui->centralwidget->layout() != nullptr)
     {
-        ui->centralwidget->layout()->setContentsMargins(8, 8, 8, 8);
-        ui->centralwidget->layout()->setSpacing(8);
+        ui->centralwidget->layout()->setContentsMargins(0, 0, 0, 0);
+        ui->centralwidget->layout()->setSpacing(0);
     }
     if (_play_widget != nullptr && _play_widget->layout() != nullptr)
     {
-        _play_widget->layout()->setSpacing(8);
+        _play_widget->layout()->setSpacing(0);
     }
 
     showNormal();
